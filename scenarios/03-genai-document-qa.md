@@ -21,6 +21,9 @@ An enterprise organization wants a secure Generative AI system that allows emplo
 
 ## 3. Architecture Diagram
 
+![GenAI Q&A and RAG Pipeline Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/genai_document_qa_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     User[Client Chat App] -->|HTTPS POST Query| APIGW[Amazon API Gateway]

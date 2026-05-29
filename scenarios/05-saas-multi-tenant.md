@@ -23,6 +23,9 @@ A software-as-a-service (SaaS) provider is building a multi-tenant enterprise ap
 
 This architecture illustrates a **Bridge Isolation Model**, combining **Silo Isolation** (dedicated, isolated resources for high-tier enterprise tenants) and **Pool Isolation** (shared compute resources with logical IAM-based data isolation for standard-tier tenants).
 
+![SaaS Multi-Tenant with Silo and Pool Isolation Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/saas_multi_tenant_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     Client[Tenant Client Applications] -->|Tenant Header Context| ALB[Application Load Balancer]

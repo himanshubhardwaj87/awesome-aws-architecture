@@ -21,6 +21,9 @@ A digital fintech company handles sensitive banking transactions, loan processin
 
 ## 3. Architecture Diagram
 
+![Zero-Trust Security Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/zero_trust_fintech_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     User[Fintech Client] -->|1. Authenticate Request| Cognito[Amazon Cognito User Pool]

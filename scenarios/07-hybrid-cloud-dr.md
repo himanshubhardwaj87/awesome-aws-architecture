@@ -21,6 +21,9 @@ An enterprise organization hosts its core operational applications and database 
 
 ## 3. Architecture Diagram
 
+![Hybrid Cloud Disaster Recovery Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/hybrid_cloud_dr_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     subgraph Corporate_Data_Center [Corporate Data Center - Primary Active]

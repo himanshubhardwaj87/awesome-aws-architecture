@@ -23,6 +23,9 @@ A rapidly growing global retail brand requires a highly available, scalable, and
 
 ## 3. Architecture Diagram
 
+![Highly Available E-commerce Platform Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/ha_ecommerce_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     Client[Client Browser / Mobile App] -->|HTTPS Requests| CloudFront[Amazon CloudFront CDN]

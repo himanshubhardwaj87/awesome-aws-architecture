@@ -22,6 +22,9 @@ An enterprise engineering team requires a secure, scalable CI/CD platform to dep
 
 ## 3. Architecture Diagram
 
+![GitOps CI/CD on AWS EKS Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/cicd_microservices_eks_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     Developer[Developer] -->|1. Git Push Code| GitApp[GitHub Application Repo]

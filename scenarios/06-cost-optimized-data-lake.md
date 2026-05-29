@@ -24,6 +24,9 @@ An enterprise organization aggregates gigabytes of raw multi-source telemetry, t
 
 This data stack implements a modern **Lakehouse Architecture**, utilizing serverless analytics engines to query open-table datasets stored directly on Amazon S3.
 
+![Cost-Optimized Data Lake on AWS Architecture](file:///Users/hbhardwaj/Code/awesome-aws-architecture/diagrams/cost_optimized_data_lake_architecture.png)
+
+### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
     Sources[Log Streams, Databases, IoT Telemetry] -->|Raw Files Ingest| Firehose[Amazon Kinesis Data Firehose]
