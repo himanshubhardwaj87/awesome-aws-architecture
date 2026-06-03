@@ -51,6 +51,7 @@ Explore detailed conceptual deep-dives covering standard cloud patterns, best pr
 *   **[Hybrid Cloud & Migration](concepts/hybrid-cloud-and-migration.md)**: Master hybrid network connectivity (Direct Connect vs. IPSec VPNs), the 7 Rs of cloud migration, AWS Storage Gateway VM appliances, and AWS MGN.
 *   **[Generative AI on AWS](concepts/genai-on-aws.md)**: Build secure serverless LLM applications using Amazon Bedrock, semantic search indexes in OpenSearch Serverless, and Retrieval-Augmented Generation (RAG).
 *   **[CI/CD & GitOps Patterns](concepts/cicd-and-gitops.md)**: Deploy applications securely using AWS developer tools (CodePipeline, CodeBuild, ECR), AWS CDK self-mutating pipelines, and pull-based ArgoCD GitOps on EKS.
+*   **[Infrastructure as Code with Terraform](concepts/terraform.md)**: Define and manage AWS resources declaratively, mastering remote state backends, DynamoDB state locking, multi-account execution, and zero-downtime resource deployment patterns.
 
 ---
 
