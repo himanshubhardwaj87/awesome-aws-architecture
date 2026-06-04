@@ -31,7 +31,7 @@ To guide your study effectively, follow this structured roadmap from foundationa
        └── Multi-Account Strategy
                      │
                      ▼
-  [ Real-World Enterprise Scenarios (RAG, E-Commerce, Data Lakes, Hybrid DR) ]
+  [ Real-World Enterprise Scenarios (RAG, E-Commerce, Data Lakes, Hybrid DR, Multi-Region DR) ]
 ```
 
 ---
@@ -66,6 +66,7 @@ Each scenario features a comprehensive high-level design walkthrough, a Mermaid 
 5.  **[SaaS Multi-Tenant Architecture](scenarios/05-saas-multi-tenant.md)**: Bridge isolation models (Silo vs. Pool) by provisioning dedicated tenant accounts via Control Tower and enforcing logical row-level partition security in DynamoDB.
 6.  **[Cost-Optimized Analytics Lakehouse](scenarios/06-cost-optimized-data-lake.md)**: Process petabytes of historical analytics cost-effectively using Kinesis Firehose, AWS Glue ETL, Apache Iceberg open table formats on S3, and serverless Amazon Athena SQL queries.
 7.  **[Hybrid Cloud Disaster Recovery](scenarios/07-hybrid-cloud-dr.md)**: Achieve RTO < 1 Hour and RPO < 1 Minute warm standby recovery using Direct Connect, Volume Storage Gateway, RDS replicas, and Route 53 DNS failover triggers.
+8.  **[Cloud-Native Multi-Region DR Options](scenarios/08-cloud-native-dr-options.md)**: Compare Backup & Restore, Pilot Light, Warm Standby, and Active-Active DR strategies for a Product Catalog app on AWS with cost analyses and detailed failover blueprints.
 
 ---
 
