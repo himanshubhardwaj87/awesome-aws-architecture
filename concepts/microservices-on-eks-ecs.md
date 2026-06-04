@@ -82,3 +82,29 @@ You can orchestrate a Canary deployment on ECS using **AWS CodeDeploy**:
 2.  Set up an AWS CodeDeploy deployment group with a canary routing configuration (e.g., `CodeDeployDefault.ECSLinear10PercentEvery1Minutes`).
 3.  CodeDeploy deploys the new task definition, registers it to Target Group Green, and instructs the ALB to direct 10% of traffic to Green.
 4.  Specify CloudWatch Alarms to monitor application error counts. If an alarm fires, CodeDeploy automatically rolls back 100% of traffic to Blue. If clear, it increments traffic over time until Green is fully verified.
+
+### Question 4: How does scaling in a Kubernetes (EKS) cluster work, and how does it compare to serverless compute like AWS Lambda?
+**Answer**: 
+Scaling in EKS operates at two distinct abstraction layers: **Pod Scaling** and **Node Scaling**, which differ completely from the single-layer execution model of AWS Lambda:
+
+1.  **Pod Autoscaling**: The **Horizontal Pod Autoscaler (HPA)** monitors pod metrics (e.g., CPU/memory utilization exceeding 50%). If a threshold is crossed, the HPA instructs the deployment controller to spin up new pods.
+2.  **Node Provisioning**: 
+    *   Unlike vanilla EC2 Auto Scaling Groups that scale based on overall VM instance utilization, Kubernetes worker nodes scale based on **resource scheduling failures**.
+    *   When the HPA creates new pods, the Kubernetes Scheduler (kube-scheduler) attempts to place them on existing worker nodes. If no node has enough reserved CPU/memory capacity left, the pod enters a **`Pending` (specifically `unschedulable`)** state.
+    *   Node scalers (such as **Cluster Autoscaler** or **Karpenter**) run loops monitoring for these `Pending unschedulable` pods. When detected, they trigger the provisioning of a new worker node (by scaling the ASG or launching instances directly). Once the node boots up, the scheduler schedules the pending pod on it.
+3.  **Comparison to AWS Lambda**: While EKS hosts pods that can serve hundreds of concurrent transactions per container without startup delays, AWS Lambda allocates one dedicated execution container per concurrent request. If Lambda is idle, it scales down to 0, whereas EKS maintains active control planes and running worker nodes regardless of active traffic.
+
+### Question 5: How do you design a path-based routing microservice architecture using an Application Load Balancer, and what are its deployment advantages?
+**Answer**: 
+To design a path-based routing microservice architecture on AWS:
+1.  Map a custom domain name (e.g., `www.store.com`) to an **Application Load Balancer (ALB)** using an **Amazon Route 53** Alias A-record.
+2.  Configure ALB **Listener Rules** to inspect the URL request path and forward traffic to corresponding **Target Groups**:
+    *   Requests to `store.com/browse` route to Target Group A (e.g., EC2 instances or ECS tasks running the catalog microservice, backed by DynamoDB).
+    *   Requests to `store.com/purchase` route to Target Group B (e.g., Kubernetes EKS pods running the checkout microservice, backed by Aurora RDS).
+    *   Requests to `store.com/returns` route to Target Group C (pointing to an AWS Lambda function handling returns).
+
+**Deployment Advantages**:
+*   **Independent Tech Stacks (Polyglot)**: Different microservices can be written in different languages (e.g., Go, Python, Node.js) and use different databases (SQL vs. NoSQL) since the ALB decouples them at the network layer.
+*   **Independent Scaling**: The target groups scale independently using different scaling policies (e.g., EKS HPA vs. EC2 Auto Scaling) based on their specific workload patterns.
+*   **Incremental Modernization (Strangler Fig)**: You can migrate functionality from a legacy monolith EC2 cluster to modern serverless microservices one route at a time by updating ALB listener rules without changing the client-facing custom domain.
+

@@ -120,3 +120,30 @@ Mechanical Sympathy means aligning design decisions with the underlying technolo
 ### Question 3: How do you design a system to be reliable when third-party APIs you consume are highly unstable?
 **Answer**: 
 Apply the **Circuit Breaker Pattern** using **AWS Step Functions** or custom code. If a third-party API begins returning 500 errors, the circuit trips to immediately reject subsequent outgoing calls with a default fallback message. This prevents application threads from blocking, queues from backing up, and system resources from exhausting. Additionally, use an **SQS Dead Letter Queue (DLQ)** to isolate failed webhook notifications for retrospective replay.
+
+### Question 4: Can you describe how you have practically used the AWS Well-Architected Tool in a project, and how it resolved a high risk?
+**Answer**: 
+In a previous project, we conducted a Well-Architected Review using the **AWS Well-Architected Tool** in the AWS Console before our production launch. The review highlighted a "High Risk" in the **Security** pillar under the *Data Protection in Transit* sub-category because our backend REST API endpoints on API Gateway were using the default AWS-provided domain endpoints (`execute-api.{region}.amazonaws.com`) rather than a custom domain name with dedicated SSL/TLS certificates.
+
+**Resolution Steps**:
+1.  We purchased a custom domain name and configured it as an Alias A-record in **Amazon Route 53** pointing to our API Gateway distribution.
+2.  We requested a public wildcard SSL/TLS certificate for our custom domain in **AWS Certificate Manager (ACM)**.
+3.  We configured the **Custom Domain Name** in API Gateway, mapping our wildcard ACM certificate to our API stages.
+4.  After verifying that traffic was fully encrypted under our custom domain, we updated our answers in the Well-Architected Tool, transitioning the risk from "High Risk" to "Resolved/No Risk" and ensuring alignment with enterprise transit encryption standards.
+
+### Question 5: How do you choose between a SQL and NoSQL database, and how does this decision impact scalability, availability, and query design?
+**Answer**: 
+Choosing between SQL (relational) and NoSQL (non-relational) databases involves evaluating data structure, scale patterns, query complexity, and transaction guarantees:
+
+*   **Choose a SQL Database (e.g., Amazon RDS / Aurora) when**:
+    1.  **Complex Queries & Joins**: Your application requires complex SQL queries, analytical aggregations, and joining multiple tables frequently.
+    2.  **ACID Compliance**: You require strict transactional consistency (e.g., financial ledger transactions or double-entry bookkeeping).
+    3.  **Predictable Data Relationships**: Your data schema is highly structured and changes infrequently.
+    *   *Scaling & Availability*: SQL writer instances typically scale **vertically** (adding CPU/Memory). High availability is achieved by deploying synchronous Read Replicas (Multi-AZ) and asynchronous global databases (Multi-Region), which requires manual or automated failover orchestrations.
+*   **Choose a NoSQL Database (e.g., Amazon DynamoDB) when**:
+    1.  **Horizontal Scale & High Throughput**: You need to handle massive volumes of read/write requests (e.g., 100k+ TPS) with consistent single-digit millisecond latency at any scale. NoSQL scales **horizontally** by partitioning data across nodes automatically.
+    2.  **Flexible Schema**: Your data is semi-structured or unstructured (e.g., user profiles, product catalogs with varying attributes, or session tokens) and your schema evolves rapidly.
+    3.  **High Availability by Default**: Databases like DynamoDB are inherently distributed and highly available, replicating data across 3 Availability Zones out of the box.
+    *   *Query Design Limits*: NoSQL does not support table joins or complex aggregations. All query patterns must be modeled in advance (e.g., defining partition keys and global secondary indexes).
+
+

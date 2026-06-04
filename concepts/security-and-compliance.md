@@ -106,3 +106,15 @@ Directly sending large files to KMS to encrypt is inefficient and runs into netw
 1.  Deploy **AWS WAF** on the API Gateway or CloudFront distribution. Configure rules to inspect payloads for standard SQL injection signatures and sanitize inputs.
 2.  Configure a **Rate-Limiting Rule** in WAF to limit client requests (e.g., block client IPs that exceed 100 requests per 5-minute period).
 3.  Enable **AWS Shield Advanced** on the public-facing distribution to automatically mitigate infrastructure-level DDoS attacks.
+
+### Question 4: How do you design end-to-end security using the 'defense in depth' model for a serverless microservice?
+**Answer**: 
+Defense in Depth means implementing layered security controls across the entire infrastructure stack to ensure that a breach at one layer is contained (reducing the blast radius). For a serverless architecture (e.g., API Gateway -> Lambda -> DynamoDB):
+
+1.  **Identity Layer (Authentication & Authorization)**: Ensure only authenticated requests reach the API Gateway by using **Amazon Cognito** User Pools or custom Lambda Authorizers.
+2.  **Network Layer (Data in Transit)**: Enforce HTTPS using SSL/TLS certificates managed in **AWS Certificate Manager (ACM)**. Deploy API Gateway inside a private subnet and use VPC Endpoints to restrict access.
+3.  **Edge Protection Layer**: Attach **AWS WAF** to API Gateway to protect endpoints from common OWASP Top 10 vulnerabilities (like SQL injection or Cross-Site Scripting) and configure rate limits to prevent brute-force or DDoS exploits.
+4.  **Compute/Runtime Layer**: Scan Lambda function packages using **Amazon Inspector** to identify runtime vulnerabilities and outdated dependencies. Use highly-scoped IAM Execution Roles applying the **Principle of Least Privilege**, and configure resource policies to only allow API Gateway to invoke the Lambda.
+5.  **Secrets Management Layer**: Never hardcode database credentials or API keys. Store them in **AWS Secrets Manager** and configure automatic credential rotation policies.
+6.  **Data at Rest Layer**: Enable **AWS KMS Envelope Encryption** with Customer Managed Keys (CMKs) to encrypt DynamoDB tables and CloudWatch log groups.
+

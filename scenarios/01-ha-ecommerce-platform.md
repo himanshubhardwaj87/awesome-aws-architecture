@@ -150,3 +150,16 @@ graph TD
 ### Question 2: Why do we place Amazon SQS between ECS and the Lambda Worker?
 **Answer**: 
 If ECS wrote directly to Aurora during a flash sale (e.g., 50,000 concurrent checkouts), the database would crash from connection exhaustion and write bottlenecks. SQS acts as a buffer (rate smoothing). It stores checkout messages securely, allowing Lambda to consume and write them to the database at a controlled, sustainable rate.
+
+### Question 3: How do you design an application to be highly scalable for a high-scale, high-burst traffic event (e.g., flash sales or major releases)?
+**Answer**: 
+Scaling under high-burst traffic (massive spikes in a few seconds) requires mitigating provisioning latencies and throttling bottlenecks at every layer of the architecture:
+
+1.  **Load Balancer Level**: Classic DNS scaling is too slow for sudden spikes. Submit a support request in advance to **pre-warm the Application Load Balancers (ALBs)** so they are pre-provisioned with adequate capacity.
+2.  **Compute Auto-Scaling Layer**: 
+    *   Utilize **Scheduled Scaling** to scale out compute capacity (EC2 instances/ECS tasks) before the event begins.
+    *   Implement **Warm Pools** in the Auto Scaling Group. This maintains a pool of pre-initialized, stopped instances that can be brought online in seconds (avoiding long OS/application boot times).
+    *   Maintain highly lightweight **AMIs/container images** by stripping unnecessary libraries to minimize cold-start provisioning latency.
+3.  **Database Connection Pooling**: Avoid connection exhaustion during sudden scaling. Implement **Amazon RDS Proxy** between the application tasks and the database to manage a shared connection pool, reuse database connections, and preserve DB memory.
+4.  **Limits & Simulation**: Run an **AWS Countdown** simulation (load testing with the AWS account team) prior to the event, and proactively request limit increases for soft service limits to prevent API-level throttling. If traffic exceeds hard account limits, deploy the architecture across multiple AWS accounts or regions.
+

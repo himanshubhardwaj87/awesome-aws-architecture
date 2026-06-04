@@ -83,3 +83,16 @@ When you commit the code changes to Git, the pipeline executes a build stage tha
 3.  Store build artifacts in a central S3 bucket configured with a Customer Managed Key (CMK) in KMS. The target deployment accounts must receive decrypt permissions on that KMS key.
 4.  Configure the pipeline with a manual approval stage between the Staging and Production deployment actions.
 5.  Use **AWS CDK Pipelines** to define this multi-stage deployment structure as code.
+
+### Question 4: What is the core difference between a traditional CI/CD pipeline and a GitOps model when deploying containerized applications to EKS?
+**Answer**: 
+GitOps does not fully replace CI/CD; rather, it modernizes the **CD (Continuous Delivery/Deployment)** phase, while the **CI (Continuous Integration)** phase remains unchanged. 
+
+The differences lie in the architecture and security model:
+*   **Traditional Push-Based CI/CD**:
+    *   *How it works*: Developers push code/manifests to Git, triggering the CI/CD pipeline (e.g., Jenkins or GitLab CI). The pipeline builds the container image and runs tests (CI). It then directly executes command-line scripts (e.g., `kubectl apply`) to **push** the updated Kubernetes manifests to the EKS cluster API.
+    *   *Security Risks*: The external CI tool requires administrative credentials to access the Kubernetes cluster. If the CI tool is compromised, the cluster is exposed.
+*   **GitOps Pull-Based Model (e.g., ArgoCD)**:
+    *   *How it works*: The CI pipeline still runs to build and push container images to Amazon ECR (CI). However, instead of pushing manifests to the cluster, the pipeline updates EKS deployment manifests in a Git configuration repository. A GitOps controller (like **ArgoCD**) running *inside* the EKS cluster continuously **pulls** (polls) the Git configuration repository. When it detects a change, it reconciles the cluster to synchronize the running state with the desired state defined in Git.
+    *   *Security Benefits*: Cluster credentials never leave EKS. No external system is granted network or admin access to the cluster, significantly reducing the blast radius of CI tooling compromises.
+

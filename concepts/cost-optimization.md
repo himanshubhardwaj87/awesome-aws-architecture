@@ -84,3 +84,30 @@ To mitigate interruptions in production:
 1.  Use Spot Instances strictly for fault-tolerant, stateless, or batch processing workloads (e.g., containerized ECS tasks, EMR worker nodes).
 2.  Create **Spot Instance Pools** across multiple instance families (e.g., combining m5.large, c5.large, and r5.large) to increase capacity availability.
 3.  Intercept the **Spot Instance Interruption Notice** via Amazon EventBridge to initiate graceful application shutdowns and checkpoint active state progress before termination.
+
+### Question 4: How do you optimize costs when designing a conversational RAG application with high user traffic?
+**Answer**: 
+1.  **Semantic Caching Layer**: Deploy a semantic caching layer (e.g., **Redis** using LangChain or GPTCache) in front of your LLM agents. By evaluating the underlying intent of incoming queries, semantically equivalent requests (e.g., "How do I reset my password?" vs. "I forgot my password, what do I do?") are served directly from the cache, bypassing agent execution and reducing LLM tokens.
+2.  **Prompt Caching**: Enable model-native prompt caching (supported by Amazon Bedrock for Claude models). This caches long-term system prompts, tool schemas, and document contexts, reducing input token costs by up to 90% for subsequent turns within a session.
+3.  **Bedrock Guardrails at Ingestion**: Position guardrails at the entry API layer to filter out malicious, toxic, or irrelevant queries before they reach the model. This avoids wasting computation resources and incurring unnecessary token fees on invalid inputs.
+4.  **Active RAG Document Cleanup**: Periodically prune duplicate, obsolete, or outdated files from the retrieval pipeline. This minimizes vector database storage fees and prevents the retrieval of bloated, stale context blocks that inflate LLM prompt tokens and increase query latency.
+
+### Question 5: What is Model Distillation, and how does it reduce Generative AI costs in production?
+**Answer**: 
+Model Distillation is an optimization technique where a larger, high-performing "teacher" model (e.g., Claude 3.5 Sonnet or Llama 3.3 70B) is used to generate high-quality outputs or labels for a domain-specific dataset. A much smaller, cheaper "student" model (e.g., Llama 3.2 1B or a local Small Language Model like Gemma) is then fine-tuned on this dataset.
+
+Benefits include:
+*   **Drastic Cost Reductions**: In production, the student model processes requests at **10x to 50x lower cost** than the teacher model.
+*   **Performance and Speed**: Distilled student models run significantly faster, often running locally on edge devices or smartphones, while retaining **90%+ of the accuracy** of the larger model for that specific, distilled task.
+*   **Amazon Bedrock Model Distillation**: AWS provides a fully managed distillation pipeline that automates training data synthesis and fine-tunes task-specific student models without managing complex custom training infrastructure.
+
+### Question 6: How do you optimize database and model hosting infrastructure costs for enterprise search and agent pipelines?
+**Answer**: 
+1.  **Tiered Vector Database Selection**:
+    *   *High-Performance*: Use **Amazon OpenSearch Serverless (AOSS)** with vector engine enabled, but monitor capacity closely since it incurs baseline compute fees even when idle.
+    *   *Standard Workloads*: Reuse existing relational databases via extensions like **pgvector on Amazon Aurora PostgreSQL** to avoid managing a separate database engine.
+    *   *Low-Cost/Batch*: Leverage **Amazon S3-based vector databases** (e.g., LanceDB storing index files on S3) to achieve maximum cost savings at the expense of slightly higher retrieval latency.
+2.  **Scale Inference Endpoints to Zero**: For self-hosted open-source models deployed via SageMaker or EC2, configure auto-scaling policies to scale instances down to zero when idle, and utilize Spot Instances (such as G5/G6 families) in non-production environments to save up to 90%.
+3.  **Task-Model Alignment**: Route low-complexity tasks (e.g., classification, basic summarization) to cheap models (e.g., Claude 3.5 Haiku) and reserve expensive models (e.g., Claude 3.5 Opus) exclusively for complex multi-step reasoning.
+4.  **Batch Inference**: Use Bedrock Batch Inference for non-real-time tasks (like offline document summarization or daily reports) to receive a 50% discount compared to real-time API pricing.
+

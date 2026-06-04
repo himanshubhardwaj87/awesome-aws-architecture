@@ -98,3 +98,14 @@ True Multi-Master databases that allow concurrent, active, multi-directional wri
 **Answer**: 
 *   **RPO** is dictated by the frequency of your backups. If you run full daily backups at midnight, and the database crashes at 11:59 PM, you stand to lose 23 hours and 59 minutes of transactions. Therefore, the RPO is **24 Hours**.
 *   **RTO** is dictated by the time it takes to launch the architecture, download the backups, import the tables, update Route 53, and boot application configurations. If the restore script takes 4 hours, your RTO is **4 Hours**.
+
+### Question 4: What is the difference between active-passive and active-active disaster recovery, and how does AWS define the strategies within them?
+**Answer**: 
+In disaster recovery (DR) designs, the choice between active-passive and active-active depends on the acceptable trade-offs between RTO, RPO, and budget:
+
+*   **Active-Passive DR**: The secondary region remains inactive or scaled-down, waiting to be promoted if the primary region fails. On AWS, there is no single strategy named "Active-Passive"; instead, it is an umbrella categorization covering three distinct AWS strategies (ordered from highest RTO/RPO to lowest):
+    1.  **Backup and Restore (Highest RTO/RPO, Lowest Cost)**: Databases are backed up to S3 and replicated to the secondary region. If a disaster occurs, all resources must be provisioned from scratch and data restored from backups.
+    2.  **Pilot Light**: The core database is kept running and replicated in the secondary region, but application servers (like EC2/ECS) are not running. They are only provisioned (usually via Terraform/CloudFormation) during failover.
+    3.  **Warm Standby (Lowest RTO/RPO for Active-Passive)**: A scaled-down but fully functional duplicate of the environment runs continuously in the secondary region. During failover, the system automatically scales up to handle production traffic.
+*   **Active-Active DR (Multi-Site)**: All regions actively serve production traffic concurrently. Route 53 routes requests globally based on policies (e.g., latency or geolocation). RTO and RPO are near real-time, but this strategy is highly complex and costly since it requires active multi-directional database replication and application deployment across both regions.
+
