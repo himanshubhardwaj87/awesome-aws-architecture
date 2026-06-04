@@ -133,17 +133,18 @@ In a previous project, we conducted a Well-Architected Review using the **AWS We
 
 ### Question 5: How do you choose between a SQL and NoSQL database, and how does this decision impact scalability, availability, and query design?
 **Answer**: 
-Choosing between SQL (relational) and NoSQL (non-relational) databases involves evaluating data structure, scale patterns, query complexity, and transaction guarantees:
+Choosing between SQL (relational) and NoSQL (non-relational) databases involves evaluating data structure, scaling patterns, query complexity, and transaction guarantees. However, modern database engines are increasingly bridging the gap:
 
 *   **Choose a SQL Database (e.g., Amazon RDS / Aurora) when**:
-    1.  **Complex Queries & Joins**: Your application requires complex SQL queries, analytical aggregations, and joining multiple tables frequently.
-    2.  **ACID Compliance**: You require strict transactional consistency (e.g., financial ledger transactions or double-entry bookkeeping).
-    3.  **Predictable Data Relationships**: Your data schema is highly structured and changes infrequently.
-    *   *Scaling & Availability*: SQL writer instances typically scale **vertically** (adding CPU/Memory). High availability is achieved by deploying synchronous Read Replicas (Multi-AZ) and asynchronous global databases (Multi-Region), which requires manual or automated failover orchestrations.
-*   **Choose a NoSQL Database (e.g., Amazon DynamoDB) when**:
-    1.  **Horizontal Scale & High Throughput**: You need to handle massive volumes of read/write requests (e.g., 100k+ TPS) with consistent single-digit millisecond latency at any scale. NoSQL scales **horizontally** by partitioning data across nodes automatically.
-    2.  **Flexible Schema**: Your data is semi-structured or unstructured (e.g., user profiles, product catalogs with varying attributes, or session tokens) and your schema evolves rapidly.
-    3.  **High Availability by Default**: Databases like DynamoDB are inherently distributed and highly available, replicating data across 3 Availability Zones out of the box.
-    *   *Query Design Limits*: NoSQL does not support table joins or complex aggregations. All query patterns must be modeled in advance (e.g., defining partition keys and global secondary indexes).
+    1.  **Strictly Structured Relationships**: Your data schema is highly rigid, relational, and changes infrequently.
+    2.  **Complex Ad-hoc Joins & Aggregations**: Your application requires complex SQL queries, heavy analytical reporting, and frequently joining multiple normalized tables.
+    *   *Scaling & HA*: SQL database storage can scale automatically (e.g., Aurora storage auto-scaling), but the primary **writer instance must scale vertically** (larger compute instances). High availability requires setting up Multi-AZ deployments with standby replication and DNS failovers.
+*   **Choose a NoSQL Database (e.g., Amazon DynamoDB, MongoDB Atlas) when**:
+    1.  **Horizontal Scalability**: You require automatic horizontal partitioning to distribute read/write workloads across multiple nodes, handling millions of requests with consistent single-digit millisecond latency.
+    2.  **Schema Flexibility**: Your data schema is semi-structured or unstructured (e.g., JSON documents) and evolves rapidly.
+    3.  **High Availability by Design**: NoSQL engines are inherently distributed, offering out-of-the-box multi-AZ replication to maintain availability even during zone failures.
+    *   *Query Design & Denormalization*: Traditionally, NoSQL does not support joins or transactions, requiring complete data denormalization. However, modern document databases (like MongoDB) support collection joins (e.g., `$lookup`), adaptive schema validations (balancing prototyping speed with data governance), and multi-document **ACID transactions** to handle mission-critical transactional workloads.
+    4.  **Unified Multi-Model Capability**: You want to avoid the operational complexity (TCO) of managing separate database engines by using a unified data platform that supports operational JSON documents, native **vector searches** (e.g., MongoDB Atlas Vector Search), and real-time analytics in-place.
+
 
 
