@@ -16,22 +16,22 @@ Every concept and scenario is documented with **Mermaid architecture diagrams**,
 To guide your study effectively, follow this structured roadmap from foundational concepts to advanced, enterprise-scale hybrid scenarios:
 
 ```
-[ Foundation: Well-Architected Framework ]
-                     │
-                     ▼
-       [ Core Pillars & Concepts ]
-       ├── High Availability & DR
-       ├── Serverless Computing
-       ├── Microservices (EKS/ECS)
-       └── Event-Driven Systems
-                     │
-                     ▼
-     [ Advanced Security & Governance ]
-       ├── Zero-Trust Networking
-       └── Multi-Account Strategy
-                     │
-                     ▼
-  [ Real-World Enterprise Scenarios (RAG, E-Commerce, Data Lakes, Hybrid DR, Multi-Region DR) ]
+[ Foundation: Well-Architected Framework | Distributed Systems | Networking & APIs ]
+                                         │
+                                         ▼
+                            [ Core Pillars & Concepts ]
+                            ├── High Availability & DR
+                            ├── Serverless Computing
+                            ├── Microservices (EKS/ECS)
+                            └── Event-Driven Systems
+                                         │
+                                         ▼
+                          [ Advanced Security & Governance ]
+                            ├── Zero-Trust Networking
+                            └── Multi-Account Strategy
+                                         │
+                                         ▼
+[ Real-World Enterprise & Classic Scenarios (RAG, E-Commerce, WhatsApp, Uber, Multi-Region DR) ]
 ```
 
 ---
@@ -41,6 +41,8 @@ To guide your study effectively, follow this structured roadmap from foundationa
 Explore detailed conceptual deep-dives covering standard cloud patterns, best practices, common pitfalls, and mock interview questions.
 
 *   **[Well-Architected Framework](concepts/well-architected-framework.md)**: Deep dive into the 6 pillars (Operational Excellence, Security, Reliability, Performance, Cost, Sustainability) mapped to native AWS services.
+*   **[Distributed Systems Fundamentals](concepts/distributed-systems-fundamentals.md)**: Master core distributed principles (CAP/PACELC, consistent hashing, consensus/Raft, split-brain, 2PC/Sagas, Bloom filters, and Quad trees) mapped to AWS services.
+*   **[Networking & API Fundamentals](concepts/networking-and-api-fundamentals.md)**: Explore Route 53 DNS routing, load balancing algorithms, forward/reverse proxies, transport protocols (TCP/UDP, HTTP/3), API styles (REST/GraphQL/WebSockets), rate limiting, and idempotency.
 *   **[High Availability & Disaster Recovery](concepts/high-availability-and-dr.md)**: Master Multi-AZ and Multi-Region strategies, active-passive vs. active-active routing, and calculating RTO/RPO objectives.
 *   **[Serverless Architecture](concepts/serverless-architecture.md)**: Build highly scalable architectures using AWS Lambda, API Gateway, DynamoDB, and Step Functions, and learn how to mitigate cold starts.
 *   **[Microservices on ECS & EKS](concepts/microservices-on-eks-ecs.md)**: Compare container orchestrators (ECS vs. EKS), task/pod security roles, Envoy sidecar service meshes, and automated deployment strategies (Blue/Green, Canary).
@@ -73,6 +75,7 @@ Each scenario features a comprehensive high-level design walkthrough, a Mermaid 
 ## 📋 Solutions Architect Cheat Sheets
 
 *   **[AWS Services Quick Reference](cheatsheets/aws-services-quick-ref.md)**: Core services quick reference sheet listing primary use cases, anti-patterns (when not to use), and architectural limits.
+*   **[Classic System Design on AWS](cheatsheets/classic-system-design-aws.md)**: 10 classic system design interview problems (e.g., URL Shortener, WhatsApp, Spotify, Uber, Web Crawler, Rate Limiter) mapped to production-grade AWS architectures.
 *   **[System Design Interview Patterns](cheatsheets/sa-interview-patterns.md)**: 10 core architectural patterns (e.g., CQRS, Saga Orchestration, Strangler Fig Monolith Migration, Outbox database synchronization) with Mermaid diagrams and interview talking points.
 *   **[DevOps Architect Interview Prep Guide](cheatsheets/devops-architect-prep.md)**: A structured 5-day study plan covering DevOps CoE, DORA metrics, enterprise Jenkins architectures, AWS multi-account deployment strategies, DevSecOps, SRE, and leadership.
 *   **[SRE & DevOps Complete Interview Q&A Guide](cheatsheets/sre-devops-complete-guide.md)**: 128 core SRE, DevOps, AWS, and Kubernetes interview questions and scenarios with detailed, beginner-friendly explanations of all underlying concepts.
