@@ -74,6 +74,8 @@ Each scenario features a comprehensive high-level design walkthrough, a Mermaid 
 
 *   **[AWS Services Quick Reference](cheatsheets/aws-services-quick-ref.md)**: Core services quick reference sheet listing primary use cases, anti-patterns (when not to use), and architectural limits.
 *   **[System Design Interview Patterns](cheatsheets/sa-interview-patterns.md)**: 10 core architectural patterns (e.g., CQRS, Saga Orchestration, Strangler Fig Monolith Migration, Outbox database synchronization) with Mermaid diagrams and interview talking points.
+*   **[DevOps Architect Interview Prep Guide](cheatsheets/devops-architect-prep.md)**: A structured 5-day study plan covering DevOps CoE, DORA metrics, enterprise Jenkins architectures, AWS multi-account deployment strategies, DevSecOps, SRE, and leadership.
+*   **[SRE & DevOps Complete Interview Q&A Guide](cheatsheets/sre-devops-complete-guide.md)**: 128 core SRE, DevOps, AWS, and Kubernetes interview questions and scenarios with detailed, beginner-friendly explanations of all underlying concepts.
 
 ---
 
