@@ -26,7 +26,7 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
 
     *   **What are they?**:
         *   **SLI (Service Level Indicator)**: The actual metric you measure (e.g., *"What percentage of requests took less than 200ms?"*). *Analogy: The speed of your car shown on the speedometer.*
-        *   **SLO (Service Level Objective)**: The target target you want to hit (e.g., *"99.9% of requests must take less than 200ms"*). *Analogy: The speed limit you try to stay below.*
+        *   **SLO (Service Level Objective)**: The target you want to hit (e.g., *"99.9% of requests must take less than 200ms"*). *Analogy: The speed limit you try to stay below.*
         *   **User Journey**: The step-by-step path a user takes, like logging in &rarr; searching for an item &rarr; checking out. You should only measure what the user feels.
     *   **Why do we do this?**: If you try to measure every single database query or server CPU spike, you'll get flooded with alerts (alert fatigue). Instead, align your goals with what actually causes "user pain". As the SRE saying goes: *"SLOs should reflect user pain, not system perfection."*
 

@@ -26,9 +26,10 @@ To guide your study effectively, follow this structured roadmap from foundationa
                             └── Event-Driven Systems
                                          │
                                          ▼
-                          [ Advanced Security & Governance ]
+                          [ Advanced Security, Governance & AIOps ]
                             ├── Zero-Trust Networking
-                            └── Multi-Account Strategy
+                            ├── Multi-Account Strategy
+                            └── AIOps Operations (DevOps Guru)
                                          │
                                          ▼
 [ Real-World Enterprise & Classic Scenarios (RAG, E-Commerce, WhatsApp, Uber, Multi-Region DR) ]
@@ -50,6 +51,7 @@ Explore detailed conceptual deep-dives covering standard cloud patterns, best pr
 *   **[Security & Compliance](concepts/security-and-compliance.md)**: Master the Shared Responsibility Model, VPC security layers (Security Groups, NACLs), WAF/Shield defenses, and KMS envelope encryption.
 *   **[Cost Optimization](concepts/cost-optimization.md)**: Learn how to right-size resources, configure cost-effective EC2 purchasing (Spot vs. Savings Plans), and build automated S3 storage class tiering pipelines.
 *   **[Multi-Account Strategy](concepts/multi-account-strategy.md)**: Set up enterprise organizations using AWS Control Tower, centralized log archiving, and Organizations-level Service Control Policy (SCP) guardrails.
+*   **[AIOps on AWS](concepts/aiops-on-aws.md)**: Design a predictive operations pipeline using CloudWatch metrics, Amazon DevOps Guru, Lookout for Metrics, and custom SageMaker log clustering and auto-remediation runbooks.
 *   **[Hybrid Cloud & Migration](concepts/hybrid-cloud-and-migration.md)**: Master hybrid network connectivity (Direct Connect vs. IPSec VPNs), the 7 Rs of cloud migration, AWS Storage Gateway VM appliances, and AWS MGN.
 *   **[Generative AI on AWS](concepts/genai-on-aws.md)**: Build secure serverless LLM applications using Amazon Bedrock, semantic search indexes in OpenSearch Serverless, and Retrieval-Augmented Generation (RAG).
 *   **[CI/CD & GitOps Patterns](concepts/cicd-and-gitops.md)**: Deploy applications securely using AWS developer tools (CodePipeline, CodeBuild, ECR), AWS CDK self-mutating pipelines, and pull-based ArgoCD GitOps on EKS.
