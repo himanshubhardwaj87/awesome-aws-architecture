@@ -18,9 +18,9 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
     ```mermaid
     graph TD
         subgraph Defining Service Levels
-            A[1. User Journey: Critical Paths <br/> e.g., Checkout Page] --> B[2. SLI: Service Level Indicator <br/> What metric to measure? e.g., % of requests < 500ms]
-            B --> C[3. SLO: Service Level Objective <br/> What is our internal target? e.g., SLI >= 99.9%]
-            C --> D[4. SLA: Service Level Agreement <br/> What is our business commitment? e.g., SLO with financial penalties]
+            A["1. User Journey: Critical Paths <br/> e.g., Checkout Page"] --> B["2. SLI: Service Level Indicator <br/> What metric to measure? e.g., % of requests < 500ms"]
+            B --> C["3. SLO: Service Level Objective <br/> What is our internal target? e.g., SLI >= 99.9%"]
+            C --> D["4. SLA: Service Level Agreement <br/> What is our business commitment? e.g., SLO with financial penalties"]
         end
     ```
 
@@ -53,22 +53,14 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
         *   **Exponential Backoff**: If a service fails, don't retry immediately every millisecond. Wait 1 second, then 2 seconds, then 4 seconds, etc., so you don't overload the struggling service.
         *   **Circuit Breaker**: If Service A fails 10 times in a row, the "circuit opens." For the next 30 seconds, any call to Service A immediately fails without making a network request, allowing Service A to recover.
 
-            ![Circuit Breaker State Diagram](https://www.plantuml.com/plantuml/svg/NOz12i8m44NtESKiMw4NS26LWhWJgZjn4P9V6aYJaanGRsyQYmLN0pFlyV-qaMNWD5bntpseQGxKMH-XnNUKpMM6epsTfB4fW7WCYAEtcWAa6ZDKtOAPQr6uHJXBEwnIZmWcDXDyOi9hDbccglFPzqzNYn-xPMVjcfH2Z1dLO2XUGihnJrXJZkvDmrfl4teqN8grS3g_-04=)
-
-            <details>
-            <summary>PlantUML Source Code</summary>
-
-            ```plantuml
-            @startuml
-            [*] --> Closed
-            Closed --> Open : Failure threshold reached (Trip)
-            Open --> HalfOpen : Reset timeout expires (Cooldown)
-            HalfOpen --> Closed : Successes detected (Close)
-            HalfOpen --> Open : Any failure detected (Re-trip)
-            @enduml
+            ```mermaid
+            stateDiagram-v2
+                Closed --> Open : Failure threshold reached (Trip)
+                Open --> HalfOpen : Reset timeout expires (Cooldown)
+                HalfOpen --> Closed : Successes detected (Close)
+                HalfOpen --> Open : Any failure detected (Re-trip)
             ```
 
-            </details>
         *   **Bulkhead Pattern**: Separate resource pools. If one tenant or feature goes crazy, isolate it so it cannot exhaust threads or memory needed by other features.
 
 ---
@@ -409,9 +401,9 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
 *   **Detailed Explanation**:
     ```mermaid
     graph TD
-        Traffic[User Traffic] --> ALB[Application Load Balancer / Route 53]
-        ALB -->|Active Traffic: 100%| Blue[Blue Environment <br/> Version 1.0 (Current)]
-        ALB -.->|Testing / Warm-up: 0%| Green[Green Environment <br/> Version 2.0 (New Deploy)]
+        Traffic["User Traffic"] --> ALB["Application Load Balancer / Route 53"]
+        ALB -->|Active Traffic: 100%| Blue["Blue Environment <br/> Version 1.0 (Current)"]
+        ALB -.->|Testing / Warm-up: 0%| Green["Green Environment <br/> Version 2.0 (New Deploy)"]
         
         style Blue fill:#85C1E9,stroke:#333,stroke-width:2px
         style Green fill:#82E0AA,stroke:#333,stroke-width:2px
@@ -508,17 +500,17 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
 *   **Detailed Explanation**:
     ```mermaid
     graph TD
-        subgraph Active-Active Architecture
-            UserA[Users] --> GSLB_A[Global Load Balancer / Route 53]
-            GSLB_A -->|50% Traffic| Region1[Region A - Active]
-            GSLB_A -->|50% Traffic| Region2[Region B - Active]
+        subgraph "Active-Active Architecture"
+            UserA["Users"] --> GSLB_A["Global Load Balancer / Route 53"]
+            GSLB_A -->|50% Traffic| Region1["Region A - Active"]
+            GSLB_A -->|50% Traffic| Region2["Region B - Active"]
             Region1 <-->|Bidirectional Sync / Conflict Resolution| Region2
         end
 
-        subgraph Active-Passive Architecture
-            UserP[Users] --> GSLB_P[Global Load Balancer / Route 53]
-            GSLB_P -->|100% Traffic| RegionP1[Region A - Active]
-            GSLB_P -.->|Failover Only: 0%| RegionP2[Region B - Passive]
+        subgraph "Active-Passive Architecture"
+            UserP["Users"] --> GSLB_P["Global Load Balancer / Route 53"]
+            GSLB_P -->|100% Traffic| RegionP1["Region A - Active"]
+            GSLB_P -.->|Failover Only: 0%| RegionP2["Region B - Passive"]
             RegionP1 -->|Asynchronous Replication| RegionP2
         end
     ```
@@ -610,15 +602,15 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
 *   **Detailed Explanation**:
     ```mermaid
     graph LR
-        Commit[Commit & Push] --> Build[Build & Unit Tests]
-        Build --> DeployStaging[Deploy to Staging]
-        DeployStaging --> PerfTests[Integration & Performance Tests]
-        PerfTests --> SLO_Gate{SLO Validation Gate}
-        SLO_Gate -->|Fails: Latency/Errors| Rollback[Block & Auto-Rollback]
-        SLO_Gate -->|Passes| CanaryDeploy[Canary Deployment (10%)]
-        CanaryDeploy --> CanaryGate{Canary Health Checks}
-        CanaryGate -->|Fails| RollbackCanary[Auto-Rollback Canary]
-        CanaryGate -->|Passes| FullRollout[Full Production Rollout]
+        Commit["Commit & Push"] --> Build["Build & Unit Tests"]
+        Build --> DeployStaging["Deploy to Staging"]
+        DeployStaging --> PerfTests["Integration & Performance Tests"]
+        PerfTests --> SLO_Gate{"SLO Validation Gate"}
+        SLO_Gate -->|Fails: Latency/Errors| Rollback["Block & Auto-Rollback"]
+        SLO_Gate -->|Passes| CanaryDeploy["Canary Deployment (10%)"]
+        CanaryDeploy --> CanaryGate{"Canary Health Checks"}
+        CanaryGate -->|Fails| RollbackCanary["Auto-Rollback Canary"]
+        CanaryGate -->|Passes| FullRollout["Full Production Rollout"]
     ```
 
     Code is automatically blocked from moving to production if tests fail or if it degrades system latency in staging.
@@ -871,8 +863,8 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
 *   **Detailed Explanation**:
     ```mermaid
     graph LR
-        LastBackup[Last Successful Backup / Sync] -->|RPO: Recovery Point Objective <br/> Allowed Data Loss Window| Disaster[Disaster Occurs / Outage Starts]
-        Disaster -->|RTO: Recovery Time Objective <br/> Allowed Downtime Window| Restored[Services Restored / Normal Operations]
+        LastBackup["Last Successful Backup / Sync"] -->|RPO: Recovery Point Objective <br/> Allowed Data Loss Window| Disaster["Disaster Occurs / Outage Starts"]
+        Disaster -->|RTO: Recovery Time Objective <br/> Allowed Downtime Window| Restored["Services Restored / Normal Operations"]
         
         style Disaster fill:#F1948A,stroke:#C0392B,stroke-width:2px
         style Restored fill:#A9DFBF,stroke:#1E8449,stroke-width:2px
