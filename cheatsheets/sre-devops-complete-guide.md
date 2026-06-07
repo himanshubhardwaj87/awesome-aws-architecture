@@ -52,6 +52,12 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
         *   **Timeouts**: Never let a service wait forever. If Service A doesn't respond in 2 seconds, stop waiting and return an error.
         *   **Exponential Backoff**: If a service fails, don't retry immediately every millisecond. Wait 1 second, then 2 seconds, then 4 seconds, etc., so you don't overload the struggling service.
         *   **Circuit Breaker**: If Service A fails 10 times in a row, the "circuit opens." For the next 30 seconds, any call to Service A immediately fails without making a network request, allowing Service A to recover.
+
+            ![Circuit Breaker State Diagram](https://www.plantuml.com/plantuml/svg/NOz12i8m44NtESKiMw4NS26LWhWJgZjn4P9V6aYJaanGRsyQYmLN0pFlyV-qaMNWD5bntpseQGxKMH-XnNUKpMM6epsTfB4fW7WCYAEtcWAa6ZDKtOAPQr6uHJXBEwnIZmWcDXDyOi9hDbccglFPzqzNYn-xPMVjcfH2Z1dLO2XUGihnJrXJZkvDmrfl4teqN8grS3g_-04=)
+
+            <details>
+            <summary>PlantUML Source Code</summary>
+
             ```plantuml
             @startuml
             [*] --> Closed
@@ -61,6 +67,8 @@ A comprehensive resource containing all 128 interview questions, scenarios, and 
             HalfOpen --> Open : Any failure detected (Re-trip)
             @enduml
             ```
+
+            </details>
         *   **Bulkhead Pattern**: Separate resource pools. If one tenant or feature goes crazy, isolate it so it cannot exhaust threads or memory needed by other features.
 
 ---
