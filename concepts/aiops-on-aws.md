@@ -36,75 +36,75 @@ The diagram below details a complete, production-grade AIOps pipeline on AWS, fe
 graph TD
     %% Telemetry Sources
     subgraph Workload [Active Workloads]
-        EKS[Amazon EKS Pods]
-        RDS[(Amazon Aurora DB)]
-        Lambda[AWS Lambda Functions]
+        EKS["Amazon EKS Pods"]
+        RDS[("Amazon Aurora DB")]
+        Lambda["AWS Lambda Functions"]
     end
     
     %% Ingest & Collect
     subgraph Ingest [Ingestion & Processing Layer]
-        CW[Amazon CloudWatch Agent]
-        CT[AWS CloudTrail Logs]
-        
-        KinesisStream((Kinesis Data Streams))
-        Firehose[Kinesis Data Firehose]
-        
-        EKS -->|Logs & Metrics| CW
-        RDS -->|Slow Query Logs| CW
-        Lambda -->|Traces & Logs| CW
-        
-        CW -->|Stream Logs| KinesisStream
-        CT -->|Stream Events| KinesisStream
-        KinesisStream --> Firehose
+        CW["Amazon CloudWatch Agent"]
+        CT["AWS CloudTrail Logs"]
+        KinesisStream(("Kinesis Data Streams"))
+        Firehose["Kinesis Data Firehose"]
     end
     
     %% Storage & Analytics
     subgraph StorageAnalytics [Storage & ML Analytics]
-        S3_Lake[(Amazon S3 Telemetry Lake)]
-        OpenSearch[(Amazon OpenSearch Service)]
-        
-        DevOpsGuru[Amazon DevOps Guru]
-        LookoutMetrics[Amazon Lookout for Metrics]
-        SageMaker[Amazon SageMaker - Custom ML]
-        
-        Firehose -->|JSON/Parquet| S3_Lake
-        Firehose -->|Log Indexing| OpenSearch
-        
-        CW -->|Metric Pull| DevOpsGuru
-        CW -->|Metric Pull| LookoutMetrics
-        S3_Lake -->|Batch Train & Predict| SageMaker
+        S3_Lake[("Amazon S3 Telemetry Lake")]
+        OpenSearch[("Amazon OpenSearch Service")]
+        DevOpsGuru["Amazon DevOps Guru"]
+        LookoutMetrics["Amazon Lookout for Metrics"]
+        SageMaker["Amazon SageMaker - Custom ML"]
     end
     
     %% Incident Management
     subgraph Engagement [Incident Engagement & Routing]
-        EventBridge((Amazon EventBridge))
-        SSM_Ops[AWS Systems Manager OpsCenter]
-        SSM_Incident[SSM Incident Manager]
-        Chatbot[AWS Chatbot / SNS]
-        
-        DevOpsGuru -->|Anomalies| EventBridge
-        LookoutMetrics -->|Anomalies| EventBridge
-        SageMaker -->|Custom Alerts| EventBridge
-        
-        EventBridge -->|Create OpsItem| SSM_Ops
-        EventBridge -->|Trigger Incident Plan| SSM_Incident
-        SSM_Incident -->|Page / Call| Chatbot
-        Chatbot -->|Slack Channel / PagerDuty| Engineer[On-Call SRE]
+        EventBridge(("Amazon EventBridge"))
+        SSM_Ops["AWS Systems Manager OpsCenter"]
+        SSM_Incident["SSM Incident Manager"]
+        Chatbot["AWS Chatbot / SNS"]
+        Engineer["On-Call SRE"]
     end
     
     %% Auto-Remediation
     subgraph SelfHealing [Intelligent Auto-Remediation]
-        RemediationRouter{EventBridge Router}
-        SSM_Automation[SSM Automation Runbooks]
-        LambdaHeal[Lambda Remediation Script]
-        
-        SSM_Ops -->|Manual / Auto Trigger| RemediationRouter
-        RemediationRouter -->|Invoke| SSM_Automation
-        RemediationRouter -->|Invoke| LambdaHeal
-        
-        SSM_Automation -->|1. Restart Pod / 2. Scale ASG| EKS
-        LambdaHeal -->|1. Reboot Instance / 2. Purge Cache| RDS
+        RemediationRouter{"EventBridge Router"}
+        SSM_Automation["SSM Automation Runbooks"]
+        LambdaHeal["Lambda Remediation Script"]
     end
+
+    %% Connections
+    EKS -->|"Logs & Metrics"| CW
+    RDS -->|"Slow Query Logs"| CW
+    Lambda -->|"Traces & Logs"| CW
+    
+    CW -->|"Stream Logs"| KinesisStream
+    CT -->|"Stream Events"| KinesisStream
+    KinesisStream --> Firehose
+    
+    Firehose -->|"JSON/Parquet"| S3_Lake
+    Firehose -->|"Log Indexing"| OpenSearch
+    
+    CW -->|"Metric Pull"| DevOpsGuru
+    CW -->|"Metric Pull"| LookoutMetrics
+    S3_Lake -->|"Batch Train & Predict"| SageMaker
+    
+    DevOpsGuru -->|"Anomalies"| EventBridge
+    LookoutMetrics -->|"Anomalies"| EventBridge
+    SageMaker -->|"Custom Alerts"| EventBridge
+    
+    EventBridge -->|"Create OpsItem"| SSM_Ops
+    EventBridge -->|"Trigger Incident Plan"| SSM_Incident
+    SSM_Incident -->|"Page / Call"| Chatbot
+    Chatbot -->|"Slack Channel / PagerDuty"| Engineer
+    
+    SSM_Ops -->|"Manual / Auto Trigger"| RemediationRouter
+    RemediationRouter -->|"Invoke"| SSM_Automation
+    RemediationRouter -->|"Invoke"| LambdaHeal
+    
+    SSM_Automation -->|"Restart Pod or Scale ASG"| EKS
+    LambdaHeal -->|"Reboot Instance or Purge Cache"| RDS
 ```
 
 ---
@@ -139,14 +139,14 @@ sequenceDiagram
     participant SSM as SSM Automation Runbook
     
     App->>DB: Database request spike
-    DB-xDB: Connection limit exceeded (Max Connections)
+    Note over DB: Connection limit exceeded (Max Connections)
     CW->>DB: Pull DatabaseConnections metric
     CW-->>Guru: Metrics exceed historical threshold
     Note over Guru: Guru correlates connection spike<br/>with RDS CPU and EKS restarts
     Guru->>EB: Publish Anomaly Notification
     EB->>SSM: Trigger DB Recovery Runbook
     Note over SSM: Runbook Step 1: Check DB health<br/>Step 2: Terminate idle connections
-    SSM->>DB: Execute pg_terminate_backend() script
+    SSM->>DB: Execute pg_terminate_backend script
     DB-->>App: Connections cleared, operations restored!
 ```
 
