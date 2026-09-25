@@ -45,7 +45,7 @@ graph TD
 
 ## 🪣 Amazon S3
 
-Regional object storage with 11 nines of durability, unlimited capacity, and objects up to 5 TB (multipart upload recommended above 100 MB, required above 5 GB).
+Regional object storage with 11 nines of durability, unlimited capacity, and objects up to 50 TB, raised from 5 TB in Dec 2025 (multipart upload recommended above 100 MB, required above 5 GB).
 
 ### Storage Classes
 
