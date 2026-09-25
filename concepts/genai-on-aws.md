@@ -156,8 +156,8 @@ A production-grade AI Agent architecture consists of four primary components:
 **Answer**:
 Self-hosting is preferred by enterprises requiring absolute data privacy, low-latency network locality, or customized model weights. A robust self-hosted architecture typically runs on **Kubernetes (Amazon EKS)**:
 
-1.  **Compute & Acceleration**: Use GPU-optimized node groups (e.g., Amazon EC2 `g5`, `p4`, or `g6` instances) managed via the **NVIDIA Device Plugin for Kubernetes** to expose GPUs to container workloads.
-2.  **Model Serving Engine**: Deploy models inside Pods using high-performance inference servers like **vLLM**, **TGI (Text Generation Inference)**, or **Ollama**. These servers optimize resource usage and throughput.
+1.  **Compute & Acceleration**: Use GPU-optimized node groups (e.g., Amazon EC2 `g5`, `g6`/`g6e`, or `p5` instances) managed via the **NVIDIA Device Plugin for Kubernetes** to expose GPUs to container workloads.
+2.  **Model Serving Engine**: Deploy models inside Pods using high-performance inference servers like **vLLM**, **TGI (Text Generation Inference)**, or **NVIDIA Triton with TensorRT-LLM**. These servers optimize resource usage and throughput. (Ollama is handy for local development, but it isn't built for multi-tenant production serving.)
 3.  **Storage**: Provision **Amazon EBS (gp3)** or **Amazon EFS** via Kubernetes Persistent Volume Claims (PVCs) to cache large model weights, avoiding download latencies during pod scaling.
 4.  **Decoupled Agent Layer**: Run the "Agent Core" (orchestration code, tool definitions, and memory sync) on cost-effective, CPU-only nodes. Keep this logic separate from the GPU-heavy inference pods, querying the LLM serving endpoints via cluster-internal DNS.
 5.  **Security Controls**: Enforce Private VPC routing. All tool calls and database lookups stay within private subnets. Use **IAM Roles for Service Accounts (IRSA)** or **EKS Pod Identities** to give agent pods fine-grained permissions to call other AWS APIs without hardcoded credentials.
@@ -165,9 +165,9 @@ Self-hosting is preferred by enterprises requiring absolute data privacy, low-la
 ### Question 10: How do you choose between CPU and GPU compute for different workloads in a Generative AI application?
 **Answer**:
 The choice between CPU and GPU is driven by latency requirements, parameter size, and cost efficiency:
-*   **Use GPUs for Model Inference**: LLM inference relies on massive, parallelized matrix multiplications. GPUs (like NVIDIA L4, A10G, or H100) contain thousands of cores designed for parallel math, processing tokens orders of magnitude faster. Using a CPU for inference on a model with >7B parameters will result in unacceptable token-generation latencies.
+*   **Use GPUs for Model Inference**: LLM inference relies on massive, parallelized matrix multiplications. GPUs (like NVIDIA L4, A10G, or H100) contain thousands of cores designed for parallel math, processing tokens orders of magnitude faster. For interactive, user-facing traffic, CPU inference on models beyond a few billion parameters is usually too slow.
 *   **Use CPUs for Agent Logic and Small Models**: The orchestrator/agent core code (which manages the execution loops, tool schemas, and database calls) is highly sequential and runs perfectly on standard CPU-based instances (like AWS Graviton `m7g` or `c7g`). Additionally, CPUs can be used for:
-    *   Extremely small, heavily quantized models (SLMs like Phi-3 or Llama-3-8B quantized to 4-bit) serving low-throughput internal tasks.
+    *   Extremely small, heavily quantized models (small models in the 1–8B range quantized to 4-bit) serving low-throughput internal tasks.
     *   Simple background batch jobs, text embeddings generation, or text classification tasks where latency is not a critical user-facing factor.
 
 ### Question 11: What is the difference between an AI Agent and Agentic AI?
@@ -179,12 +179,12 @@ While related, they refer to different levels of scope and autonomy:
 ### Question 12: What are the primary cost factors in a Generative AI architecture, and what strategies can optimize these costs?
 **Answer**:
 **Primary Cost Drivers**:
-1.  **Inference Tokens**: Input tokens (system prompt, full conversation history, retrieved RAG context, and tool definitions) and output tokens (the generated response, which is typically priced 2-3x higher than input).
+1.  **Inference Tokens**: Input tokens (system prompt, full conversation history, retrieved RAG context, and tool definitions) and output tokens (the generated response, which is typically priced 3–5x higher per token than input; 5x for current Claude models).
 2.  **Infrastructure & Serving**: The cost of running idle or underutilized GPU nodes for self-hosted models.
 3.  **Vector Database Memory**: Vector databases require keeping high-dimensional vector indexes (like HNSW) in RAM to maintain fast semantic search performance.
 
 **Cost Optimization Strategies**:
-1.  **Model Routing (Cascading)**: Route simple requests (e.g., intent detection, summarization) to small, cost-effective models (e.g., Claude 3.5 Haiku, Llama-3-8B) and escalate to expensive "frontier" models (e.g., Claude 3.5 Sonnet, Llama-3-70B) only for complex reasoning.
+1.  **Model Routing (Cascading)**: Route simple requests (e.g., intent detection, summarization) to small, cost-effective models (e.g., Claude Haiku or a small open-weight model) and escalate to expensive "frontier" models (e.g., Claude Sonnet or Opus) only for complex reasoning.
 2.  **Advanced Batching**: For self-hosted deployments, use serving engines (like vLLM) that implement **continuous batching** and **PagedAttention** (KV-cache optimization) to maximize GPU utility and prevent memory fragmentation.
 3.  **GPU Sharing**: Implement Multi-Instance GPU (MIG) or time-slicing to split a single physical GPU (e.g., NVIDIA A100) into multiple virtual instances, allowing multiple small models or agent processes to run on the same hardware.
 4.  **Quantization**: Use compressed models (e.g., FP8, INT4, AWQ, GPTQ) that reduce memory footprints significantly, enabling larger models to run on cheaper GPUs with minimal loss in accuracy.
@@ -194,7 +194,7 @@ While related, they refer to different levels of scope and autonomy:
 **Answer**:
 *   **Favorite Service**: **Amazon Bedrock**. It stands out because of its fully managed serverless API, which allows developers to swap different foundation models (Claude, Llama, Mistral) with zero infrastructure change. It also natively handles security (data isolation, VPC endpoints, KMS encryption) and simplifies RAG via Knowledge Bases.
 *   **Proposed Improvement (Architectural Pain Point)**: In production Bedrock agent architectures, managing memory requires coordinating multiple heterogeneous databases (e.g., DynamoDB/ElastiCache for session history, OpenSearch Serverless for vector RAG, RDS for transactional data). This introduces high operational complexity, data synchronization latency (CDC pipelines), and multiple network roundtrips for the agent's tool-calling loops.
-*   **The Solution**: AWS should introduce a more unified, multi-model database option or a natively integrated "Agent Memory State Store" within Bedrock. This would work similarly to modern unified databases (such as Oracle 23ai's support for JSON, relational, vectors, and graph search in a single engine), allowing agents to perform transactional updates, relational joins, and semantic searches using a single query interface. This would reduce agent reasoning latency, eliminate complex sync pipelines, and lower overall architectural complexity.
+*   **The Solution**: AWS has started closing this gap with **Amazon Bedrock AgentCore Memory**, which manages short-term and long-term agent memory. The next improvement I'd want is tighter integration, so an agent can combine that memory with transactional and vector lookups (for example Aurora PostgreSQL with pgvector) through one governed interface. That would remove CDC sync pipelines and cut round trips in the tool-calling loop.
 
 
 

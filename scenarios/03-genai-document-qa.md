@@ -41,7 +41,7 @@ graph TD
         LambdaAgent -->|2. Semantic KNN Vector Search| OpenSearch
         OpenSearch -->|3. Return Relevant Text Context| LambdaAgent
         
-        LambdaAgent -->|4. Structured Prompt with Context| BedrockLLM[Amazon Bedrock: Claude 3.5 Sonnet]
+        LambdaAgent -->|4. Structured Prompt with Context| BedrockLLM[Amazon Bedrock: Claude Sonnet]
         BedrockLLM -->|5. Token Stream Response| LambdaAgent
         LambdaAgent -->|6. Stream Response Back| APIGW
     end
@@ -75,7 +75,7 @@ graph TD
     *   The Lambda runs a **k-Nearest Neighbors (k-NN) search** against the vector index in OpenSearch Serverless to identify the top 3 most semantically similar text chunks.
 3.  **Prompt Synthesis**: The Lambda constructs a structured prompt containing the retrieved context and the user query, wrapping them inside strict system constraints:
     > *Instructions: Answer the question using ONLY the provided context. If the answer cannot be found in the context, respond with "I do not know."*
-4.  **Inference**: The Lambda sends the synthesized prompt to **Amazon Bedrock (Claude 3.5 Sonnet)**.
+4.  **Inference**: The Lambda sends the synthesized prompt to **Amazon Bedrock (Claude Sonnet)**.
 5.  **Streaming Output**: Claude generates the answer, streaming the tokens back to the Lambda. The Lambda forwards the stream to API Gateway WebSockets, providing a real-time typing experience to the client.
 
 ---
@@ -111,7 +111,7 @@ graph TD
 *   **Total Monthly Cost**: ~$500 - $1,500 (highly dependent on model usage).
 *   **Key Cost Drivers**:
     *   *Amazon OpenSearch Serverless*: Ingestion & Query OCU capacity charges (~$400/month baseline fee).
-    *   *Amazon Bedrock API Usage*: Claude charges per 1,000 input/output tokens. Claude 3.5 Sonnet is highly cost-effective, but costs scale with request volume.
+    *   *Amazon Bedrock API Usage*: Bedrock bills Claude per input and output token (priced per million tokens). Output tokens cost several times more than input tokens, and costs scale with request volume.
 
 ---
 
@@ -155,7 +155,7 @@ Real interviews push past the first design. Practice defending it against these 
 
 ### Follow-Up 1: Chat usage grows 10x after company-wide rollout. What breaks first, and how do you fix it?
 **Answer**: 
-*   **First to break**: **Amazon Bedrock on-demand quotas** for Claude 3.5 Sonnet (requests per minute and tokens per minute). Users see throttling errors mid-stream long before Lambda or OpenSearch Serverless run out of capacity.
+*   **First to break**: **Amazon Bedrock on-demand quotas** for Claude Sonnet (requests per minute and tokens per minute). Users see throttling errors mid-stream long before Lambda or OpenSearch Serverless run out of capacity.
 *   **Fixes**:
     1.  Use **cross-region inference profiles** to spread load across regions, request quota increases, or buy **Provisioned Throughput** for a predictable baseline.
     2.  Add a **semantic cache** (e.g., ElastiCache or DynamoDB keyed by query-embedding similarity) so repeated questions like "travel policy" skip the LLM.
@@ -184,7 +184,7 @@ Real interviews push past the first design. Practice defending it against these 
 *   **Recovery**: The index is **derived data**. Rebuild it from S3 by replaying documents through the ingestion pipeline (SQS with a **DLQ** for poison files). Keep **S3 Versioning** on the document bucket so a rebuild matches a known-good corpus.
 *   **RTO driver**: Re-embedding throughput, which is limited by Titan quotas. Pre-compute and store embeddings in S3 alongside chunks so a rebuild only re-indexes and doesn't re-embed.
 
-### Follow-Up 5: Claude 3.5 Sonnet has a regional outage or sustained throttling. How does the system stay up?
+### Follow-Up 5: Claude Sonnet has a regional outage or sustained throttling. How does the system stay up?
 **Answer**: 
 *   Call models through the **Bedrock Converse API**, which is model-agnostic, so swapping models is a configuration change rather than a code rewrite.
 *   Implement a **fallback chain** in the coordinator Lambda. First use a **cross-region inference profile** for the same model, then fall back to an alternative model (e.g., a smaller Claude model or another Bedrock provider). Use a **circuit breaker** so the Lambda stops hammering a failing endpoint.

@@ -123,7 +123,7 @@ Network-attached, AZ-scoped volumes replicated within the AZ. Move across AZs or
 
 | Volume Type | Media | Max IOPS | Max Throughput | Use Case |
 | :--- | :--- | :--- | :--- | :--- |
-| **gp3** | SSD | 16,000 (3,000 baseline, provisioned independently) | 1,000 MB/s | Default, boot volumes |
+| **gp3** | SSD | 80,000 (3,000 baseline, provisioned independently) | 2,000 MiB/s | Default, boot volumes; up to 64 TiB (limits raised Sept 2025) |
 | **gp2** | SSD | 16,000 (3 IOPS/GB, burst credits) | 250 MB/s | Legacy; migrate to gp3 |
 | **io2 Block Express** | SSD | 256,000 | 4,000 MB/s | Critical databases, sub-ms, 99.999% durability |
 | **io1** | SSD | 64,000 | 1,000 MB/s | Legacy provisioned IOPS |
@@ -169,7 +169,7 @@ A serverless, elastic NFSv4 file system for Linux, mountable by thousands of EC2
 
 ### Snow Family and Transfer Services
 
-*   **Snowcone** (8-14 TB) and **Snowball Edge** (about 80 TB Storage Optimized, or Compute Optimized for edge processing) move data physically. Rule of thumb: if the transfer would take over a week on available bandwidth, use Snow.
+*   **Snowball Edge** (Storage Optimized 210 TB NVMe, or Compute Optimized for edge processing) moves data physically. **Snowcone was discontinued in November 2024**, and since **November 7, 2025** Snowball Edge is available only to existing Snow customers. New customers use **AWS Data Transfer Terminal** or partner solutions for offline transfer. Rule of thumb: if the transfer would take over a week on available bandwidth, plan an offline option.
 *   **DataSync**: Agent-based online transfer (NFS, SMB, HDFS, S3) with scheduling and verification.
 
 ---
@@ -206,7 +206,7 @@ Centralized, policy-based backup for EBS, EFS, FSx, RDS, Aurora, DynamoDB, S3, a
 ## SA Interview Questions on Storage
 
 ### Question 1: How do you choose between EBS, EFS, and S3?
-**Answer**: Use **EBS** for low-latency block storage attached to one instance (databases, boot disks), **EFS** when many Linux instances across AZs need a shared POSIX file system, and **S3** for unlimited-scale object storage over HTTP (data lakes, backups, media). Per-GB cost generally ranks S3 lowest, then EFS, then EBS.
+**Answer**: Use **EBS** for low-latency block storage attached to one instance (databases, boot disks), **EFS** when many Linux instances across AZs need a shared POSIX file system, and **S3** for unlimited-scale object storage over HTTP (data lakes, backups, media). Per GB-month (us-east-1), S3 Standard is cheapest (~$0.023), gp3 EBS is next (~$0.08) and EFS Standard is the most expensive (~$0.30). EFS Infrequent Access and Archive tiers with lifecycle policies close much of that gap, and EBS bills for provisioned size while EFS and S3 bill for what you store.
 
 ### Question 2: An EBS gp2 volume's performance is inconsistent. What is happening?
 **Answer**: gp2 IOPS is tied to size (3 IOPS per GB) with a burst-credit bucket; small volumes exhaust credits and fall to baseline. Migrate online to **gp3**, which gives 3,000 IOPS baseline with IOPS and throughput provisioned independently at lower cost. For sustained high IOPS with sub-ms latency, use io2 Block Express.

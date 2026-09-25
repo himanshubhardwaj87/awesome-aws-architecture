@@ -79,7 +79,7 @@ spec:
 | Type | Behavior on EKS |
 | :--- | :--- |
 | **ClusterIP** | Internal virtual IP. Default. |
-| **LoadBalancer** | Provisions an **NLB** through the AWS Load Balancer Controller. |
+| **LoadBalancer** | With the **AWS Load Balancer Controller** (or EKS Auto Mode), provisions an **NLB**. Without it, the legacy in-tree provider creates a Classic Load Balancer. |
 | **Headless** (`clusterIP: None`) | DNS returns pod IPs. Used by StatefulSets. |
 
 ### Ingress
@@ -194,4 +194,4 @@ Start with `kubectl get pods -n <ns>`, then `kubectl describe pod <pod>` (Events
 **Answer**: Confirm with `kubectl describe pod` (exit code 137, Reason OOMKilled) and measure actual usage with `kubectl top pod --containers` or Container Insights. Then raise the limit if the need is legitimate, tune the runtime heap (for example JVM `MaxRAMPercentage`), or fix the leak. Use VPA recommendations to right-size.
 
 ### Question 7: How do you secure pod-to-pod and pod-to-AWS access on EKS?
-**Answer**: For pod-to-pod, apply default-deny NetworkPolicies per namespace and allow only required flows, optionally with security groups for pods or a service mesh for mTLS. For pod-to-AWS, use Pod Identity or IRSA with narrowly scoped IAM policies, block IMDS access from pods (hop limit of 1 or IMDSv2 required), and use a private cluster endpoint with KMS envelope encryption for Secrets.
+**Answer**: For pod-to-pod, apply default-deny NetworkPolicies per namespace and allow only required flows, optionally with security groups for pods or a service mesh for mTLS. For pod-to-AWS, use Pod Identity or IRSA with narrowly scoped IAM policies, block IMDS access from pods (require IMDSv2 *and* set the hop limit to 1 on nodes; IMDSv2 alone does not stop pods), and use a private cluster endpoint with KMS envelope encryption for Secrets.

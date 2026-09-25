@@ -81,7 +81,7 @@ graph LR
     Sig -->|"verify at admission"| Run
 ```
 
-*   **Amazon ECR scanning**: *Basic* scans on push using the open-source Clair-based scanner. *Enhanced* uses **Amazon Inspector** for continuous OS and language-package scanning, re-scanning when new CVEs are published. Route findings via EventBridge to Security Hub or block promotion in the pipeline.
+*   **Amazon ECR scanning**: *Basic* scans on push using AWS-native scanning technology (the older Clair-based scanner was retired in February 2026). *Enhanced* uses **Amazon Inspector** for continuous OS and language-package scanning, re-scanning when new CVEs are published. Route findings via EventBridge to Security Hub or block promotion in the pipeline.
 *   **Signing**: **AWS Signer** with the **Notation** CLI (Notary v2), or **Sigstore cosign**, attaches signatures to the image in ECR. On EKS, enforce with an admission controller (Kyverno, OPA Gatekeeper, or Ratify) so only signed images from trusted registries run.
 
 ---

@@ -177,7 +177,7 @@ Real interviews push past the first design. Practice defending it against these 
     *   A large pool tenant becomes a **hot partition** on its `TenantID` key in the shared DynamoDB table.
 *   **Fixes**:
     1.  Cache **STS session credentials per tenant** for their lifetime instead of per request.
-    2.  **Write-shard** big tenants (`TenantID#<n>`) and update the IAM condition to `StringLike` on `dynamodb:LeadingKeys` with `"${aws:PrincipalTag/TenantID}#*"`.
+    2.  **Write-shard** big tenants (`TenantID#<n>`) and update the IAM condition to `ForAllValues:StringLike` on `dynamodb:LeadingKeys` with `"${aws:PrincipalTag/TenantID}#*"`. The key is multivalued, so it needs the `ForAllValues` set operator, like the base policy above.
     3.  Move routing into **ALB listener rules** or an **API Gateway Lambda authorizer with caching** so tenant resolution isn't a per-request invocation.
     4.  **Silo** side: Queue account vending through **Control Tower Account Factory for Terraform (AFT)** and raise the **Organizations account quota** ahead of time.
 

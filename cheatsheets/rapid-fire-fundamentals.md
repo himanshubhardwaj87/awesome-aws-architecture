@@ -191,7 +191,7 @@ Deep dive: [Terraform](../concepts/terraform.md)
 | Question | Answer |
 | :--- | :--- |
 | What is Terraform state for? | It maps configuration to real resource IDs and tracks metadata so Terraform can compute diffs. |
-| What is the recommended remote backend on AWS? | S3 with versioning and encryption. Use S3 native locking (`use_lockfile`, Terraform 1.10+); DynamoDB locking is the legacy approach. |
+| What is the recommended remote backend on AWS? | S3 with versioning and encryption. Use S3 native locking (`use_lockfile`, GA in Terraform 1.11); DynamoDB locking is the legacy approach. |
 | Is a `sensitive` value safe in state? | No. It is only hidden in CLI output and is still stored in plaintext in state, so protect the backend. |
 | `count` vs `for_each`? | `count` indexes by number (removing a middle item shifts others); `for_each` keys by map or set value, which is more stable. |
 | What replaced `terraform taint`? | `terraform apply -replace=<address>`. |
