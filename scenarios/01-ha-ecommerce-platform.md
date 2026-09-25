@@ -163,3 +163,47 @@ Scaling under high-burst traffic (massive spikes in a few seconds) requires miti
 3.  **Database Connection Pooling**: Avoid connection exhaustion during sudden scaling. Implement **Amazon RDS Proxy** between the application tasks and the database to manage a shared connection pool, reuse database connections, and preserve DB memory.
 4.  **Limits & Simulation**: Run an **AWS Countdown** simulation (load testing with the AWS account team) prior to the event, and proactively request limit increases for soft service limits to prevent API-level throttling. If traffic exceeds hard account limits, deploy the architecture across multiple AWS accounts or regions.
 
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: Flash-sale traffic grows 10x (to ~500,000 requests/sec). What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: The single **Aurora PostgreSQL writer**. Connection counts climb as Fargate tasks scale out and as the SQS-triggered Lambda order processor scales up, and write IOPS on the one writer node become the ceiling.
+*   **Fixes**:
+    1.  Put **RDS Proxy** in front of Aurora for both the ECS tasks and the Lambda worker. Cap the worker with the SQS event source mapping's **maximum concurrency** so the queue absorbs the spike rather than the DB.
+    2.  Offload reads to **Aurora Replicas** with replica auto-scaling. Cache catalog API responses at **CloudFront** (short TTLs) and in **ElastiCache Redis** in cluster mode with more shards.
+    3.  Keep the inventory gate in Redis (`DECRBY`) so oversold orders never reach SQS or Aurora.
+    4.  If writes still saturate, move the hottest write paths (carts, order intake) to **DynamoDB**, or shard orders across Aurora clusters by customer or region.
+
+### Follow-Up 2: Finance asks you to cut the monthly bill by 40%. What do you change, and what do you give up?
+**Answer**: 
+*   **Compute**: Run the stateless web tier on a baseline of on-demand **Fargate** tasks and put burst capacity on **Fargate Spot**. Cover the baseline with a **Compute Savings Plan**. *Give up*: Spot tasks can be reclaimed with 2 minutes' notice, so request draining must be solid.
+*   **Database**: Move Aurora to **Graviton** instances with **Reserved Instances**, right-size the reader, and evaluate **Aurora I/O-Optimized** vs. Standard based on the I/O share of the bill. *Give up*: A 1–3 year commitment, and less read headroom if you drop a replica.
+*   **Edge**: Raise the CloudFront cache hit ratio for catalog pages. Every cache hit is a request that ALB, Fargate, and Aurora don't pay for. *Give up*: Catalog data can be slightly stale (seconds).
+*   **Do not cut**: The Multi-AZ Aurora standby or the WAF. They protect the 99.99% SLA and PCI-DSS scope.
+
+### Follow-Up 3: How do you perform a major Aurora PostgreSQL version upgrade with zero downtime?
+**Answer**: 
+1.  Create an **RDS Blue/Green Deployment**. Aurora builds a synchronized green cluster on the new major version using logical replication.
+2.  Run regression and load tests against the green endpoint while production stays on blue.
+3.  Before switchover, **pause the Lambda order processor** (disable the SQS event source mapping). New checkouts keep landing safely in SQS.
+4.  Trigger switchover, which typically completes in under a minute. **RDS Proxy** holds client connections, so ECS tasks see a brief pause instead of errors.
+5.  Re-enable the event source mapping so Lambda drains the backlog. Keep the blue cluster available until you've validated the result.
+
+### Follow-Up 4: The ElastiCache Redis cluster fails. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: Redis is more than a cache here. It holds **session state, shopping carts, and the atomic inventory counter**. Losing it logs users out, empties carts, removes the anti-oversell gate, and sends every catalog read to Aurora at once (a cache stampede).
+*   **Prevention**: Run Redis in **cluster mode with Multi-AZ replicas and automatic failover** (replica promotion in seconds), and consider **ElastiCache Global Datastore** for cross-region copies.
+*   **Degraded mode**: The ECS app trips a circuit breaker to read from Aurora through **RDS Proxy**. It falls back to `SELECT ... FOR UPDATE` on inventory rows and rate-limits checkout with **WAF** rate-based rules.
+*   **Recovery**: Rebuild the inventory counters from the Aurora stock ledger before reopening the Redis gate. Warm the hot catalog keys with jittered TTLs.
+
+### Follow-Up 5: The business expands to the EU, and GDPR data-residency rules require that EU customer data stays in the EU. How does the design change?
+**Answer**: 
+*   Deploy a second **regional cell** (e.g., `eu-central-1`) with its own VPC, ECS/Fargate, ElastiCache, SQS, Lambda, and **Aurora cluster** that holds EU customer, cart, and order data.
+*   Use **Route 53 geolocation routing** (or per-market domains) to send EU users to the EU cell. **CloudFront** stays global for static assets in S3.
+*   Split the data: non-personal **product catalog** data can replicate globally (**Aurora Global Database** or an S3/DynamoDB catalog feed). Customer PII and payment records never leave their home region.
+*   Enforce residency with an **SCP** that denies EU-account resource creation outside approved regions (`aws:RequestedRegion`), and use region-scoped **KMS keys**.
+*   Keep **PCI-DSS** scope small by tokenizing cards at the payment gateway, so the Lambda worker never stores card numbers in either region.

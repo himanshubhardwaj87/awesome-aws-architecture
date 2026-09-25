@@ -247,3 +247,54 @@ Standard Route 53 health checks perform automated failovers. However, for comple
 *   **DynamoDB Global Tables** natively support multi-region active-active writes (multi-primary). Writes can occur anywhere and replicate bi-directionally.
 *   **Amazon Aurora Global Database** uses a single-primary writer architecture. The primary database in us-west-2 handles all write transactions, while the replica database in us-east-1 is read-only (asynchronous replication). 
 *   If us-west-2 fails, you must initiate a database promotion to turn the us-east-1 replica into the new primary writer. During this promotion window, writes are blocked. Achieving true active-active write capability on relational databases requires application-level sharding or write forwarding, which introduces significant latency and code complexity.
+
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: Catalog traffic grows 10x (10,000 to 100,000 requests/sec). What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: **Regional service quotas** on the serverless tier.
+    *   Lambda's default concurrency (often 1,000 per region) is far below the ~10,000 concurrent executions that 100k rps at ~100 ms needs.
+    *   API Gateway's account-level throttle (10,000 rps default) also caps throughput.
+    *   **In Warm Standby and Pilot Light, the DR region must absorb this 10x load too**, so quotas must match in both regions.
+*   **Fixes**:
+    1.  Raise Lambda and API Gateway quotas in **both `us-west-2` and `us-east-1`**, and verify them with **ARC readiness checks**.
+    2.  The catalog is read-heavy. Put **CloudFront** in front and add **DAX** for DynamoDB reads so most requests never reach Lambda.
+    3.  Pre-warm DynamoDB on-demand tables with **warm throughput** to avoid throttling on sudden spikes.
+    4.  Question the **EC2 web to API Gateway** extra hop. Serving the API directly (or with CloudFront to API Gateway) removes a scaling tier.
+
+### Follow-Up 2: You're on Warm Standby (~$1,200/month DR). Leadership wants 40% off. What do you change, and what do you give up?
+**Answer**: 
+*   **Option A: Move to Pilot Light (~$400/month).** Keep the DynamoDB Global Table replica and the AMIs, but turn off the always-on EC2 node and the idle ALB. *Give up*: RTO grows from ~5–10 minutes to ~15–30 minutes, and failover becomes scripted rather than automatic.
+*   **Option B: Stay Warm Standby but trim.** The **Route 53 ARC and health-check fees** (~$775/month) are the biggest line item. Reduce the number of health checks and ARC components to what failover actually needs, and run the single standby EC2 on **Graviton**. *Give up*: Less granular readiness auditing.
+*   **Never trade away** Global Tables replication. It is what keeps RPO in seconds for every strategy above Backup & Restore.
+
+### Follow-Up 3: How do you upgrade from Backup & Restore to Warm Standby (or Active-Active) with zero downtime?
+**Answer**: 
+1.  **Convert the existing DynamoDB table to a Global Table** by adding a `us-east-1` replica. This is an online operation. DynamoDB backfills existing items while the table keeps serving traffic.
+2.  Deploy the scaled-down stack (ALB, EC2 ASG, API Gateway, Lambda) in `us-east-1` with **Terraform/CloudFormation**, and validate it with synthetic canaries.
+3.  Add Route 53 **failover records with health checks**, plus **ARC routing controls** for operator-controlled switches.
+4.  **For Active-Active only**: First ship **conditional writes and version attributes** in the Lambda code, then move to **weighted routing** at 95/5, then 50/50, while watching conflict and error metrics.
+5.  Run a **game day** that performs a real failover before relying on it.
+
+### Follow-Up 4: DynamoDB in `us-west-2` becomes impaired, but the ALB and EC2 health checks stay green. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: This is a **gray failure**. A shallow health check on the ALB passes, so **Route 53 never fails over**, while every catalog read and write in the primary region fails. The result is a full outage that the automation doesn't detect.
+*   **Detection**:
+    *   Use **deep health checks**, meaning a health endpoint that exercises EC2 to API Gateway to Lambda to DynamoDB.
+    *   Add **CloudWatch alarm-based Route 53 health checks** on Lambda and DynamoDB error rates.
+*   **Recovery**: Flip **Route 53 ARC routing controls** to `us-east-1`. ARC works on the Route 53 **data plane**, so it doesn't depend on control-plane APIs during an incident. The Global Table replica is already current to within seconds.
+*   **After recovery**: Reconcile writes that weren't replicated before the impairment (the RPO window). Items written in the DR region during the incident replicate back automatically once `us-west-2` recovers.
+
+### Follow-Up 5: The business adds `eu-west-1` as a third region, and EU seller data must stay in the EU. How does the multi-region design change?
+**Answer**: 
+*   **Global Tables replicate every item to every replica region**, with no per-item filtering, so one table can't hold both global and EU-restricted data.
+*   **Split the data model**:
+    *   A **global catalog table** (non-personal product data) replicated to all three regions.
+    *   A separate **EU-only table** for EU seller and customer data that exists only in `eu-west-1`, plus an equivalent pattern for any other restricted data.
+*   **Routing**: Use **Route 53 geolocation routing** to send EU users to `eu-west-1`. Lambda in each region writes restricted data only to its local table.
+*   **Conflicts**: A third writer region increases the chance of **Last-Writer-Wins** conflicts. Add **region pinning** (a `home_region` attribute per product, with writes forwarded to the home region) plus version checks.
+*   **Governance**: Add an **SCP** restricting EU resources to approved regions, and ARC readiness checks covering all three regions' quotas.

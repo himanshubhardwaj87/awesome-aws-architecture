@@ -232,3 +232,51 @@ graph TD
 ### Key Interview Points
 - **Why ArgoCD / GitOps?**: The infrastructure and deployment versions are declaratively defined in Git. Reversing a bad deployment requires single-click Git reverts.
 - **Blue-Green switch**: EKS Ingress routing can dynamically shift percentage-based traffic using AWS Load Balancer Controller attributes.
+
+---
+
+## 🎤 Interview Questions
+
+### Question 1: When is CQRS overkill?
+**Answer**:
+*   When read and write shapes are similar and the load fits one database. A single Aurora cluster with **read replicas** (or DynamoDB with a GSI) solves the scaling problem without a second model.
+*   When the business cannot tolerate **eventual consistency** between write and read (e.g., the user must see their balance immediately after a transfer). This forces read-your-writes workarounds.
+*   When the team cannot operate the replication pipeline (DMS tasks, stream lag, re-sync after schema changes).
+*   **Use it** when reads need a different store (OpenSearch full-text, DynamoDB key lookups), read and write scale differ by orders of magnitude, or you already have an event stream to project from.
+
+### Question 2: Saga orchestration vs. choreography: what are the trade-offs?
+**Answer**:
+*   **Orchestration (Step Functions)**: A central state machine owns the flow, retries and compensations. You get a visual execution history, easy auditing, and timeouts per step. The costs are a central coordinator that every service is coupled to, and per-state-transition pricing for Standard workflows.
+*   **Choreography (EventBridge/SNS events)**: Each service reacts to events and emits its own. Services are loosely coupled and easy to extend. The costs are that the end-to-end flow exists only implicitly, cyclic dependencies creep in, and you need distributed tracing (X-Ray) to see the whole flow.
+*   **Rule of thumb**: Orchestrate flows with compensations, strict ordering or SLAs (payments, orders). Choreograph loose side effects (notifications, analytics).
+*   In both styles, every step and compensation must be **idempotent**, because retries will happen.
+
+### Question 3: Why not just publish the event right after the database commit instead of using the Outbox pattern?
+**Answer**:
+*   The process can crash, or the broker can time out, between `COMMIT` and `Publish`. The order then exists but no downstream service ever hears about it. Publishing *before* the commit has the opposite problem: an event for a transaction that rolled back.
+*   The outbox writes the event row **in the same local transaction** as the business row. A CDC relay (DMS, Debezium on **MSK Connect**) publishes it afterwards, giving at-least-once delivery.
+*   **DynamoDB variant**: **DynamoDB Streams → EventBridge Pipes** turns the table itself into the outbox, so no separate outbox table is needed.
+*   **Consequences**: Consumers must dedupe (the relay can republish), and you must prune or TTL the outbox table.
+
+### Question 4: Your API Gateway → SQS → Lambda webhook pipeline is sending messages to the DLQ even though the code never errors. Walk me through it.
+**Answer**:
+*   Check Lambda `Throttles`. If the function has low **reserved concurrency**, the SQS poller still receives messages. Throttled invocations return them to the queue, which consumes receive attempts until `maxReceiveCount` sends them to the DLQ.
+*   **Fix**: Cap concurrency with the event source mapping's **maximum concurrency** setting instead of (or above) reserved concurrency, so the poller stops pulling rather than failing.
+*   Also check visibility timeout (at least 6x the function timeout) and batch size/batching window relative to RDS connection limits. Use **RDS Proxy** to pool connections.
+*   After the fix, redrive the DLQ back to the source queue.
+
+### Question 5: During a DR game day, your warm standby took 45 minutes instead of 15. Where did the time go?
+**Answer**:
+*   **Detection**: A health check on a shallow `/ping` endpoint stayed green while the app was broken, or alarms required too many datapoints. Use deep health checks and **Route 53 ARC** routing controls for a deliberate, manual failover.
+*   **DNS**: High record TTLs and client-side caching (JVM) delayed the switch.
+*   **Data**: Aurora Global Database promotion was manual and undocumented. Script the managed failover and rehearse it.
+*   **Capacity**: The ASG scaled from 1 to 40 instances slowly. Pre-warm with AMIs that bake dependencies, and confirm **service quotas** (EC2 vCPU, Lambda concurrency) in the DR region are raised ahead of time.
+*   **Dependencies**: Secrets, parameters, ECR images or KMS keys existed only in the primary region.
+
+### Question 6: How do you run a blue/green deployment on EKS when the release includes a database schema change?
+**Answer**:
+*   Blue and green share one database, so the schema must work for **both versions at once**. Use the **expand/contract** pattern.
+*   **Expand**: Add new columns or tables as nullable, and deploy code that writes to both old and new structures. Backfill in batches.
+*   **Shift**: Move traffic 10% → 100% with ALB weighted target groups (AWS Load Balancer Controller) or **Argo Rollouts**, gating on CloudWatch/Prometheus error-rate analysis.
+*   **Contract**: Only after blue is retired and a rollback window has passed, drop the old columns in a separate release.
+*   Rollback then remains a Git revert in ArgoCD, with no down-migration. Destructive migrations never ship in the same release as the code that depends on them.

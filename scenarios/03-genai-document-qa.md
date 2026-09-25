@@ -146,3 +146,48 @@ Amazon Bedrock prioritizes enterprise data security:
 **Answer**: 
 Relational databases rely on exact keyword matches (e.g., matching "travel policy"). If a user asks, *"Can I get refunded for my flight ticket?"*, a standard SQL query will return zero matches because the word "refunded" does not exist in the "travel policy" text. 
 OpenSearch Serverless supports **Vector Embeddings and k-NN Search**, converting words into semantic vector maps. This allows identifying matching text chunks based on meaning (e.g., connecting "refunded flight" semantically to "travel reimbursement") to provide accurate search results.
+
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: Chat usage grows 10x after company-wide rollout. What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: **Amazon Bedrock on-demand quotas** for Claude 3.5 Sonnet (requests per minute and tokens per minute). Users see throttling errors mid-stream long before Lambda or OpenSearch Serverless run out of capacity.
+*   **Fixes**:
+    1.  Use **cross-region inference profiles** to spread load across regions, request quota increases, or buy **Provisioned Throughput** for a predictable baseline.
+    2.  Add a **semantic cache** (e.g., ElastiCache or DynamoDB keyed by query-embedding similarity) so repeated questions like "travel policy" skip the LLM.
+    3.  Set **API Gateway** usage plans and per-user throttling, plus **reserved concurrency** on the RAG Coordinator Lambda, because streaming responses hold invocations open for several seconds.
+    4.  On the ingestion side, cap the SQS-triggered parser Lambda's concurrency so bulk uploads don't exhaust the **Titan Embeddings** quota shared with live queries.
+
+### Follow-Up 2: Cut the monthly cost by 40%. What do you change, and what do you give up?
+**Answer**: 
+*   **Model tiering**: Route simple lookup questions to a smaller, cheaper model (e.g., Claude Haiku) and keep Sonnet for multi-document reasoning. *Give up*: Some answer quality on questions that get misrouted.
+*   **Fewer tokens per request**: Tighten chunk size and the top-k retrieved chunks, and use **Bedrock prompt caching** for the fixed system prompt. *Give up*: Recall on questions whose answers span many chunks.
+*   **Ingestion**: Run bulk re-embedding with **Bedrock batch inference** at a discount instead of on-demand calls.
+*   **Vector store**: The **OpenSearch Serverless** OCU baseline (~$400/month) dominates at low traffic. Cap max OCUs, turn off redundant replicas for dev collections, or move low-QPS workloads to **Aurora PostgreSQL pgvector** or **S3 Vectors**. *Give up*: Higher latency and less headroom for hybrid search.
+
+### Follow-Up 3: You need to switch embedding models (e.g., Titan v1 to Titan v2) with zero downtime. How?
+**Answer**: 
+1.  Vectors from different embedding models aren't comparable, so this is a **blue/green index migration**, not an in-place update.
+2.  Create a new **OpenSearch Serverless index** sized for the new model's vector dimensions.
+3.  Re-embed the full corpus from **S3**, which remains the source of truth (claim check pattern), by replaying an S3 Inventory listing into the ingestion SQS queue. Meanwhile, **dual-write** new uploads to both indexes.
+4.  Run an offline **retrieval evaluation set** (question to expected source document) against both indexes, and compare recall and answer quality.
+5.  Flip the RAG Coordinator Lambda to the new index and model through configuration (**SSM Parameter Store** or a weighted **Lambda alias** for a canary). Keep the old index for fast rollback, then delete it.
+
+### Follow-Up 4: The OpenSearch Serverless vector collection becomes unavailable or its index is corrupted. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: Retrieval fails for every query. The critical rule is to **fail closed**. The coordinator Lambda must not call Claude without context, or the system produces ungrounded answers that break the anti-hallucination requirement. Users get a clear "search is temporarily unavailable" response.
+*   **Resilience**: AOSS runs across multiple AZs with redundant replicas, so AZ failure is handled by the service. Most real incidents are bad writes, mapping errors, or accidental deletes.
+*   **Recovery**: The index is **derived data**. Rebuild it from S3 by replaying documents through the ingestion pipeline (SQS with a **DLQ** for poison files). Keep **S3 Versioning** on the document bucket so a rebuild matches a known-good corpus.
+*   **RTO driver**: Re-embedding throughput, which is limited by Titan quotas. Pre-compute and store embeddings in S3 alongside chunks so a rebuild only re-indexes and doesn't re-embed.
+
+### Follow-Up 5: Claude 3.5 Sonnet has a regional outage or sustained throttling. How does the system stay up?
+**Answer**: 
+*   Call models through the **Bedrock Converse API**, which is model-agnostic, so swapping models is a configuration change rather than a code rewrite.
+*   Implement a **fallback chain** in the coordinator Lambda. First use a **cross-region inference profile** for the same model, then fall back to an alternative model (e.g., a smaller Claude model or another Bedrock provider). Use a **circuit breaker** so the Lambda stops hammering a failing endpoint.
+*   Keep a **prompt and eval suite per fallback model**. Grounding instructions such as "answer ONLY from context" must be re-validated because different models follow them differently.
+*   Apply the same **Bedrock Guardrails** configuration to every model in the chain so safety and PII filtering don't weaken during failover.
+*   Tell users when a fallback model is serving their request, and alarm on the fallback rate in CloudWatch.

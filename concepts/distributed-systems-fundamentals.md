@@ -205,3 +205,35 @@ Aurora Global Database operates as a single-master system across regions. The pr
 **Answer**:
 Consider a Web Crawler or URL Shortener designed to lookup millions of records. If a requested key does not exist, looking it up in the database requires an expensive I/O operation (or cache miss penalty).
 By placing a **Bloom Filter in ElastiCache Redis**, the system checks if the key exists *before* hitting the database. If the Bloom filter returns `false`, the app immediately returns a 404 response without executing any database query, preserving write/read IOPS and reducing operational costs.
+
+### Question 4: A 30-second database blip ended, but your service stayed down for an hour. Walk me through what happened.
+**Answer**:
+This is a **metastable failure** driven by retry amplification and a thundering herd:
+*   **Layered retries**: If the client, the API tier and the AWS SDK each retry 3 times, one user request becomes up to 27 database calls. The recovered database is immediately overloaded again.
+*   **Cache stampede**: Cached keys expired during the outage, and thousands of concurrent misses hit Aurora for the same key at once.
+*   **Diagnose** with CloudWatch: request count rises while successful throughput stays flat, `DatabaseConnections` sits at its maximum, and X-Ray traces show retries.
+*   **Fix**: Retry at **one layer only**, using exponential backoff with **full jitter**. Use the SDK's `standard`/`adaptive` retry mode, which includes a retry quota. Add a **circuit breaker**, shed load early (API Gateway throttling, SQS as a buffer), put **RDS Proxy** in front of the database, and add request coalescing plus randomized TTLs in ElastiCache.
+
+### Question 5: A product manager asks for "exactly-once delivery" of payment events. What do you tell them?
+**Answer**:
+Exactly-once *delivery* over a network isn't achievable in practice. What you can build is **effectively-once processing** = at-least-once delivery + idempotent consumers.
+*   SQS standard, SNS, EventBridge, Kinesis and Lambda retries are all at-least-once. SQS FIFO deduplication only covers a **5-minute window**. Kafka exactly-once semantics on MSK only holds *inside* Kafka.
+*   Make the consumer idempotent. Write a dedupe record with a DynamoDB conditional put (`attribute_not_exists(pk)`). Better, wrap the dedupe record and the business write in one `TransactWriteItems` so both commit together.
+*   Use **Lambda Powertools Idempotency** to get this with a TTL-bound DynamoDB table.
+*   The trade-off is extra latency and a table write per message, in exchange for correctness under duplicates.
+
+### Question 6: Design leader election for a singleton worker (e.g., a nightly reconciler) running on multiple ECS tasks.
+**Answer**:
+1.  Use a **DynamoDB lease**. Each task tries a conditional `PutItem` on `lock#reconciler` that succeeds only if the item is absent or `leaseExpiry < now`. The winner stores its `ownerId` and a monotonically increasing **fencing token**.
+2.  The leader renews the lease with a heartbeat (e.g., every 10s on a 30s lease). The **DynamoDB Lock Client** implements this pattern.
+3.  **Fencing**: Every downstream write carries the token, and the store rejects older tokens. A paused ("zombie") ex-leader therefore cannot corrupt data after its lease expires.
+4.  Alternatives: **Kubernetes Lease objects** on EKS (client-go leader election), or avoid needing a leader at all. **EventBridge Scheduler** plus an SQS FIFO queue with a single message group gives singleton execution without a lock.
+5.  Do not rely on ECS `desiredCount = 1`. Deployments and task replacement can briefly run two copies.
+
+### Question 7: How do clock skew and event ordering affect a distributed system on AWS, and how do you design around them?
+**Answer**:
+*   Wall clocks drift between nodes. EC2 syncs to the **Amazon Time Sync Service** (`169.254.169.123`, with PTP hardware clocks on supported instances), but skew is small, not zero. Timestamps from different hosts therefore cannot establish causal order.
+*   **Last-writer-wins by timestamp** (e.g., DynamoDB Global Tables conflict resolution) can silently drop a logically newer update.
+*   **Design choices**: Order per entity with sequence numbers. Examples are a DynamoDB `version` attribute with conditional updates, Kinesis sequence numbers per shard, and SQS FIFO per `MessageGroupId`.
+*   Use Lamport or hybrid logical clocks when you need causal order across services. Use **ClockBound** when you need timestamps with explicit error bounds.
+*   The Snowflake ID pattern refuses to generate IDs when the local clock moves backward, for the same reason.

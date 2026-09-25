@@ -162,3 +162,56 @@ graph TD
 **Answer**: 
 *   **CloudFormation** is a template engine that provisions resources within an existing AWS account. It does not create accounts, set up organizational hierarchies, or configure external security guardrails automatically.
 *   **AWS Control Tower** operates at the Organizations level. Its **Account Factory** automates account creation, applies default security guardrails (Service Control Policies), establishes network paths, and registers accounts to centralized logging services in a single step, ensuring consistent governance.
+
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: The tenant count grows 10x (hundreds to thousands). What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: Per-request overhead and hot keys in the **pool** tier.
+    *   The **Tenant Traffic Routing Lambda** is in the hot path for every tenant.
+    *   Calling **STS AssumeRole** on every request runs into STS rate limits.
+    *   A large pool tenant becomes a **hot partition** on its `TenantID` key in the shared DynamoDB table.
+*   **Fixes**:
+    1.  Cache **STS session credentials per tenant** for their lifetime instead of per request.
+    2.  **Write-shard** big tenants (`TenantID#<n>`) and update the IAM condition to `StringLike` on `dynamodb:LeadingKeys` with `"${aws:PrincipalTag/TenantID}#*"`.
+    3.  Move routing into **ALB listener rules** or an **API Gateway Lambda authorizer with caching** so tenant resolution isn't a per-request invocation.
+    4.  **Silo** side: Queue account vending through **Control Tower Account Factory for Terraform (AFT)** and raise the **Organizations account quota** ahead of time.
+
+### Follow-Up 2: Cut the platform cost by 40%. What do you change, and what do you give up?
+**Answer**: 
+*   **Silo overhead** dominates, because every premium account duplicates its NAT Gateways, ALB, and VPC.
+    *   Centralize egress through **Transit Gateway**, or use **VPC sharing (AWS RAM)**, so silo accounts don't each run NAT Gateways.
+    *   Move low-utilization silo databases to **Aurora Serverless v2**.
+    *   *Give up*: A shared network plane weakens the "fully independent stack" story you sell to enterprise customers.
+*   **Re-tier**: Move mid-size customers who don't need physical isolation to the pool, or to a **"pod" bridge model** (a few tenants per shared stack).
+*   **Pool**: Switch the DynamoDB table from on-demand to **provisioned with auto-scaling** for steady load, and cover ECS Fargate with **Savings Plans** (with **Fargate Spot** for async jobs).
+*   Enforce **per-tenant cost allocation tags** so you can see which tenants are unprofitable before cutting.
+
+### Follow-Up 3: A Standard (pool) tenant upgrades to Premium (silo). How do you migrate them with zero downtime?
+**Answer**: 
+1.  Provision the tenant's dedicated account through **Control Tower Account Factory**, and deploy the silo stack (ECS Fargate and **Aurora**).
+2.  **Backfill**: Query the tenant's partition (`TenantID` PK) from the shared DynamoDB table and transform it into the relational schema in Aurora.
+3.  **CDC**: Stream ongoing changes with **DynamoDB Streams**. A Lambda with an **event filter on `TenantID`** applies them to Aurora until lag is near zero.
+4.  **Validate**: Run shadow reads against both stores and reconcile row counts and checksums.
+5.  **Cutover**: Flip the tenant's entry in the tenant registry so the **Routing Lambda** sends traffic to the silo account. Use a per-tenant write pause of seconds only if needed. Blast radius is one tenant.
+6.  Keep the pool rows read-only for a rollback window, then delete them.
+
+### Follow-Up 4: The Tenant Traffic Routing Lambda (or its tenant registry) fails. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: This is the highest-impact component because **every tenant in both tiers** routes through it. Unlike a single silo account failure (one tenant) or a DynamoDB pool issue (pool tenants only), a bad routing deploy is a platform-wide outage. It can also be a cross-tenant **misrouting** incident, which is worse than downtime.
+*   **Prevention**:
+    *   Deploy the routing Lambda with **CodeDeploy canary traffic shifting** on aliases and auto-rollback on error alarms.
+    *   Set **reserved concurrency**, and cache the tenant-to-destination map in memory with a TTL.
+*   **Fail closed**: If tenant context can't be verified from the **signed JWT**, reject the request. Never default-route it.
+*   **Recovery**: Roll back the Lambda alias, and restore the tenant registry from **DynamoDB point-in-time recovery**. Long term, push static routing into ALB rules so the Lambda leaves the critical path.
+
+### Follow-Up 5: A new enterprise customer requires that all their data stays in the EU (data residency). How does the bridge model handle it?
+**Answer**: 
+*   **Silo tenant**: Vend their account from **Control Tower** into an EU-only OU with an **SCP denying `aws:RequestedRegion`** outside approved EU regions. Deploy the silo stack and Aurora in `eu-west-1` with a tenant-specific **KMS key**.
+*   **Pool tenants in the EU**: Stand up a **regional pool deployment** (ECS and a separate DynamoDB table in the EU). Do **not** use DynamoDB Global Tables, because it replicates every item to every replica region and would break residency.
+*   **Control plane**: The tenant registry stores `TenantID -> region/tier` and keeps only non-personal metadata centrally. The routing layer sends each tenant to its home region (e.g., tenant-specific subdomains with **Route 53**).
+*   **Evidence**: **AWS Config** conformance packs and CloudTrail give auditors proof that data resources exist only in approved regions.

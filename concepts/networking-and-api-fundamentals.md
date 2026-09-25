@@ -172,3 +172,34 @@ If two servers read `count = 9` simultaneously and both increment it, the databa
 To avoid this race condition:
 1.  Use **Redis Transactions** (`MULTI` / `EXEC`) or **Lua Scripts**. Redis executes Lua scripts atomically, ensuring no other client can write between the read and update stages.
 2.  In a multi-region deployment, synchronize rates asynchronously to avoid cross-region network latency on every API call. Use **Redis Global Datastore** to replicate rate limits asynchronously across regions, using local cache checks for critical path evaluation and global sync for background updates.
+
+### Question 4: Users intermittently get 502s and 504s from your ALB. Walk me through troubleshooting.
+**Answer**:
+First separate the two codes, because they point at different failures:
+*   **502 Bad Gateway**: The target *answered badly*: it closed or reset the connection, sent a malformed response, or a Lambda target returned an invalid payload. The classic cause is an app keep-alive timeout **shorter** than the ALB idle timeout (default 60s). ALB reuses a socket the target has just closed (e.g., Node.js defaults to 5s).
+*   **504 Gateway Timeout**: The target *did not answer in time*. Either ALB could not open a connection to it (security group/NACL, nothing listening on the port), or the target took longer than the idle timeout (slow query, thread pool exhaustion).
+*   **Where to look**: Compare `HTTPCode_ELB_5XX_Count` with `HTTPCode_Target_5XX_Count` in CloudWatch, then enable **ALB access logs** in S3. Query them with Athena for `target_status_code = '-'`, `target_processing_time` and `error_reason`.
+*   **Fixes**: Set the app keep-alive timeout above the ALB idle timeout, tune slow endpoints or raise the idle timeout for them, and check `TargetResponseTime` and unhealthy host counts during deployments. Enable deregistration delay so in-flight requests drain.
+
+### Question 5: VPC Peering vs. Transit Gateway vs. PrivateLink: how do you choose?
+**Answer**:
+*   **VPC Peering**: A 1:1, non-transitive link with no hourly or processing fee. It cannot have overlapping CIDRs and grows as $n(n-1)/2$ connections. It suits a handful of VPCs with high traffic volume, where TGW per-GB processing charges would add up.
+*   **Transit Gateway**: A regional hub with transitive routing. It supports **route tables for segmentation** (prod cannot reach dev), VPN and Direct Connect Gateway attachments, and inter-region peering. The trade-off is a per-attachment-hour charge plus a per-GB processing charge, and one extra hop. It is the default for 10+ VPCs or any hybrid setup.
+*   **PrivateLink (Interface Endpoints / Endpoint Services)**: Exposes a **single service** (behind an NLB), not a whole network. Traffic is one-way from consumer to provider, and **overlapping CIDRs are fine**. It is ideal for SaaS or a shared platform API consumed by many accounts. **VPC Lattice** extends this idea to service-to-service networking with IAM auth.
+*   **Rule of thumb**: TGW for network connectivity, PrivateLink/Lattice for service exposure, peering for a few high-volume pairs.
+
+### Question 6: Design hybrid DNS so on-prem servers resolve AWS private hosted zones and AWS workloads resolve `corp.example.com`.
+**Answer**:
+1.  In a central **Networking account**, create **Route 53 Resolver endpoints** in a shared-services VPC, each with ENIs in at least two AZs.
+2.  **Inbound endpoint**: On-prem DNS servers get conditional forwarders for `aws.example.com`, pointing at the inbound endpoint IPs. Route 53 then answers from **Private Hosted Zones** associated with that VPC.
+3.  **Outbound endpoint + forwarding rule**: Create a rule forwarding `corp.example.com` to on-prem DNS IPs over Direct Connect/VPN.
+4.  **Share the rules via AWS RAM** to every workload account and associate them with their VPCs. Associate workload PHZs with the shared-services VPC (cross-account association authorization) so inbound queries can resolve them.
+5.  Allow TCP/UDP 53 in the endpoint security groups, watch per-ENI query limits, and add **Route 53 Resolver DNS Firewall** to block exfiltration domains.
+
+### Question 7: How do you plan CIDR ranges for a 200-VPC, multi-region organization that also connects to on-prem?
+**Answer**:
+*   Use **Amazon VPC IPAM** as the single source of truth, with hierarchical pools (e.g., `10.0.0.0/8` → a /12 per region → a /14 per environment → /20–/22 per VPC). Share pools to OUs via RAM so teams cannot pick their own ranges.
+*   **Reserve the on-prem ranges** and avoid common collisions: `172.17.0.0/16` (Docker bridge) and ranges used by partners or acquired companies.
+*   Size subnets for growth: AWS reserves 5 IPs per subnet. **EKS with the VPC CNI** consumes one IP per pod, so give pods a secondary CIDR from `100.64.0.0/10` with custom networking.
+*   Keep routable VPC CIDRs small and summarizable so TGW/DX route tables stay under the BGP prefix limits.
+*   If overlap is unavoidable (e.g., after an acquisition), expose services over **PrivateLink** or translate addresses with a **Private NAT Gateway** instead of re-IPing.
