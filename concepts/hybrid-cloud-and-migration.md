@@ -103,3 +103,37 @@ AWS MGN automates migrations through a highly secure, non-disruptive process:
 3.  Replication runs continuously in the background without affecting source application performance or requiring restarts.
 4.  When you are ready to migrate, launch **Test Instances** to verify the environment.
 5.  Perform a final cutover to transition users to the newly launched production instances on AWS, and terminate the source on-premises replication servers.
+
+### Question 4: How do you plan migration waves for 600 servers across 80 applications?
+**Answer**:
+1.  **Discover**: Run **AWS Application Discovery Service** (agent-based for network dependencies) and **Migration Evaluator** for right-sizing and the business case. Track everything in **AWS Migration Hub**.
+2.  **Group by dependency, not by server**: Apps that share a database or talk constantly move together in one *move group*. Splitting them across a Direct Connect link adds latency to every call.
+3.  **Assign a 7R** to each app (rehost with **MGN**, replatform databases with **DMS**, retire or retain the rest).
+4.  **Wave 0 is a pilot**: Pick low-risk, low-dependency apps and prove the landing zone, networking, runbooks and rollback. Later waves (typically 2–4 weeks each) ramp in size and criticality.
+5.  Each wave gets a cutover runbook, go/no-go criteria, a rollback plan and a hypercare window. Automate repeatable steps with **Migration Hub Orchestrator** templates.
+
+### Question 5: After a DNS cutover to AWS, some users are still hitting the old on-prem servers. Walk me through it.
+**Answer**:
+*   **TTL not lowered early enough**: Drop the record TTL to 60s at least one *old* TTL period before cutover. Otherwise resolvers keep the cached answer for up to the old TTL (often 24h).
+*   **Client-side caches**: JVM DNS caching (`networkaddress.cache.ttl`), OS resolvers, and hard-coded IPs or `/etc/hosts` entries in batch jobs and partner firewalls.
+*   **Split-horizon DNS**: The public zone was updated but the on-prem internal zone, or a conditional forwarder, still returns the old address. Check Route 53 Resolver rules and the Private Hosted Zone.
+*   **Verify** with `dig` against each resolver path, and watch source-side connection logs to find who is still connecting.
+*   **Safe pattern**: Use Route 53 **weighted records** to shift traffic gradually. Keep the source in sync (MGN not yet finalized, DMS reverse replication) so rollback is simply flipping the record back.
+
+### Question 6: You need to move 500 TB to S3 and have a 1 Gbps link. DataSync or Snowball?
+**Answer**:
+*   **Do the math first**: 500 TB over 1 Gbps at ~80% utilization is roughly **58 days**, and it saturates the link for production traffic.
+*   **AWS DataSync**: Online, incremental, with built-in integrity checks, scheduling and bandwidth throttling. It targets S3/EFS/FSx. It is best when the link can carry the volume in your window, or for ongoing sync.
+*   **Snowball Edge**: Offline bulk transfer, typically about a week per device round trip regardless of volume. It is best when bandwidth × time < data size, or the site has poor connectivity. Confirm current Snow device availability, since AWS has been narrowing the Snow Family.
+*   **Common hybrid**: Seed the bulk data with Snowball, then run **DataSync** for the delta that changed while devices were in transit, and cut over.
+
+### Question 7: Design a highly resilient Direct Connect architecture for a critical production workload.
+**Answer**:
+*   Follow the **AWS Direct Connect Resiliency Toolkit** models:
+    *   **Maximum resiliency**: Separate connections on separate devices in **at least two DX locations**.
+    *   **High resiliency**: One connection in each of two DX locations.
+    *   **Development/test**: Two connections in a single location, which does not protect against a location outage.
+*   Terminate on a **Direct Connect Gateway → Transit Gateway** so one set of connections serves many VPCs and regions.
+*   Use **BGP** for active/active or active/passive (local preference communities, AS_PATH prepending), and enable **BFD** for sub-second failover.
+*   Add a **Site-to-Site VPN** as a last-resort backup, and use **MACsec** or IPsec-over-DX if encryption is required.
+*   Regularly test failover with the DX **failover testing** feature, which brings BGP sessions down on purpose.

@@ -125,16 +125,18 @@ graph TD
 *   **Mechanism**: Token Bucket or Sliding Window Counter.
 *   **Redis Lua Scripting**: The Lambda Authorizer runs an atomic Lua script on Redis:
     ```lua
+    -- KEYS[1] = "rl:{tenant}:{epochSecond}" (fixed 1-second window per key)
     local key = KEYS[1]
     local limit = tonumber(ARGV[1])
-    local current = tonumber(redis.call('get', key) or "0")
-    if current + 1 > limit then
-        return 0
-    else
-        redis.call("INCRBY", key, 1)
-        redis.call("EXPIRE", key, 1)
-        return 1
+    local current = redis.call("INCR", key)
+    if current == 1 then
+        -- Set the TTL only when the window's key is created
+        redis.call("EXPIRE", key, 2)
     end
+    if current > limit then
+        return 0
+    end
+    return 1
     ```
 *   **Failure Modes**: Redis availability outage blocks all API traffic. Mitigation: Fail-open fallback (if Redis queries time out, allow requests but trigger alerts).
 
@@ -263,3 +265,55 @@ graph TD
 *   **Mechanism**: Decouple ingest from delivery. Incoming payloads are classified into Priority Queues (e.g., SQS High Priority for OTP/2FA, SQS Low Priority for Marketing).
 *   **AWS Delivery Integrations**: SNS handles SMS and push alerts, SES handles transactional emails, and Amazon Pinpoint handles campaign targeting.
 *   **Failure Modes**: Downstream provider throttling (e.g., carrier SMS block). Mitigation: Configure SQS Dead Letter Queues (DLQs) to retry failed notifications automatically with exponential backoff.
+
+---
+
+## 🎤 Interview Questions
+
+### Question 1: A single short link goes viral and gets 1M redirects/sec. How does your URL shortener handle the hot key?
+**Answer**:
+*   **Absorb it at the edge**: Return a `302` with `Cache-Control: max-age` so **CloudFront** serves most hits without reaching the origin. A `301` is cached by browsers forever, which is cheaper but loses click analytics and makes link edits impossible.
+*   **Protect Redis**: A single key lives on one shard. Add read replicas, plus a small in-process LRU cache inside the Lambda execution environment with a few seconds of TTL.
+*   **Protect DynamoDB**: Adaptive capacity helps, but put **DAX** in front of reads for hot items.
+*   **Keep analytics off the hot path**: Send click events asynchronously to **Kinesis Data Firehose → S3**.
+
+### Question 2: How does your WhatsApp design guarantee per-chat ordering and delivery to users who are offline?
+**Answer**:
+*   A standard SQS queue does not preserve order, so give each message a **per-chat sequence number**. Assign it with a DynamoDB atomic counter on `chatId`, or use SQS FIFO with `MessageGroupId = chatId`.
+*   Persist every message to DynamoDB (`chatId`, `seq`) **before** attempting delivery. The history table is the source of truth, and the WebSocket push is best effort.
+*   If the Redis session lookup finds no `connectionId`, or `PostToConnection` returns `410 Gone`, mark the message undelivered and send a push notification via SNS/Pinpoint.
+*   On reconnect, the client sends its last acknowledged `seq` per chat and the server replays the gap. Clients dedupe by `messageId`, which makes retries safe.
+
+### Question 3: A tenant sending steady traffic well under its per-second limit still gets bursts of 429s. The limiter's Lua script runs `INCRBY key 1` then `EXPIRE key 1` on every allowed request, using a key of `rl:{tenant}`. Walk me through it.
+**Answer**:
+*   The script calls `EXPIRE key 1` on **every** allowed request. Under continuous traffic the TTL keeps getting pushed forward, so the counter never resets. It counts *all requests since the tenant was last idle for 1s*, not requests per second.
+*   The count therefore creeps up until it crosses `limit`. Every request is then rejected, and rejected requests don't refresh the TTL. The key finally expires about 1s later and the cycle repeats. The result is periodic 429 storms for a compliant tenant.
+*   **Fix**: Set the expiry only when the key is created (`INCR` returns 1). Better, embed the window in the key, `rl:{tenant}:{epochSecond}`, so each window is a fresh key.
+*   For smoother limits, use a sliding window counter or a token bucket that stores `tokens` and `lastRefill` in a hash.
+*   Verify with `TTL`/`GET` on the tenant's key and per-tenant 429 metrics in CloudWatch.
+
+### Question 4: Your Uber-style proximity service melts in Manhattan at rush hour. How do you fix the hotspot?
+**Answer**:
+*   With fixed-size geohash cells, dense areas put millions of updates onto a few keys, and therefore onto one Redis shard.
+*   **Adaptive cells**: Use a quadtree-like split, or a finer geohash precision in dense areas, so each cell holds a bounded number of drivers.
+*   **Shard by region**: Use separate ElastiCache clusters per metro, and pick the cluster from the rider's coarse location.
+*   **Reduce write volume**: Only send a location update when a driver moves more than N meters. Batch updates through **Kinesis** before writing to Redis.
+*   Query the rider's cell plus neighboring cells, and cap the result count. Exact nearest-neighbor is unnecessary for matching.
+
+### Question 5: A scheduled job occasionally runs twice in your distributed scheduler. What's going on and how do you fix it?
+**Answer**:
+*   **Likely causes**:
+    *   The job ran longer than the SQS **visibility timeout**, so a second worker received the message.
+    *   Or the DynamoDB lock lease expired while the first worker was paused (GC, throttling), and a second worker acquired it.
+*   **Fixes**:
+    *   Extend visibility with `ChangeMessageVisibility` heartbeats while the job runs.
+    *   Renew the lease periodically, and use a **fencing token** that the job's side-effecting writes must present.
+    *   Make the job idempotent. Write a `jobId#scheduledTime` completion record with a conditional put before side effects, or check it before starting.
+*   For long or multi-step jobs, move execution to **Step Functions**, which gives exactly-once workflow execution per unique execution name (Standard workflows).
+
+### Question 6: How do you stop a marketing blast from delaying OTP messages, and avoid spamming a user with duplicates?
+**Answer**:
+*   **Isolation**: Keep separate SQS queues, separate Lambda **event source mapping maximum concurrency**, and separate SES configuration sets / SNS origination numbers for transactional vs. marketing traffic. Then a 50M-message campaign cannot starve OTPs.
+*   **Provider limits**: Throttle the marketing workers to the SES sending rate and SMS throughput quotas, rather than letting throttling errors pile up in the DLQ.
+*   **Dedup**: Build an idempotency key from `userId + templateId + eventId` and store it in DynamoDB with a TTL.
+*   **Per-user limits**: Enforce frequency caps (e.g., max 3 marketing messages/day) and honor opt-out and preference data before enqueueing.

@@ -149,3 +149,54 @@ graph TD
 Amazon Athena bills strictly based on the volume of data scanned ($5.00 per Terabyte scanned).
 1.  **Compression**: Parquet format uses advanced algorithms to compress data, reducing raw storage size by up to 80% compared to flat CSV files.
 2.  **Columnar Storage**: CSV is row-oriented; to find values in a single column, Athena must scan the entire file. Parquet is column-oriented. If a query only requests the `sales_revenue` column, Athena only scans that specific column block in S3, bypassing all other columns. This can reduce data scan volumes by over 90%, lowering costs proportionally.
+
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: Daily ingest volume and query load grow 10x. What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: The **per-upload Glue trigger**. Every Firehose flush starts a Glue Spark job, which hits **Glue concurrent job limits**. Concurrent jobs writing the same **Iceberg** table cause commit conflicts under optimistic concurrency, and frequent small flushes create a **small-files problem** that slows Athena and raises S3 GET costs.
+*   **Fixes**:
+    1.  Switch to **scheduled micro-batch** Glue runs with **job bookmarks** for incremental processing, or have **Firehose write directly to Iceberg tables**.
+    2.  Increase **Firehose buffer size and interval** so it writes fewer, larger files.
+    3.  Enable **Glue Data Catalog automatic compaction** for Iceberg tables, or schedule `OPTIMIZE`.
+    4.  Isolate heavy BI in separate **Athena workgroups** (or Athena provisioned capacity), and push steady dashboard workloads to **Redshift Serverless** or QuickSight **SPICE**.
+
+### Follow-Up 2: Cut the monthly data platform bill by 40%. What do you change, and what do you give up?
+**Answer**: 
+*   **Glue**: Run non-urgent ETL on the **Flex execution class** (spare capacity, much cheaper per DPU-hour), enable auto-scaling, and right-size workers. *Give up*: Unpredictable start times and less fresh data.
+*   **Athena**:
+    *   Set **per-query data-scanned limits** in workgroups and use **partition projection**.
+    *   Enable **query result reuse**.
+    *   Point QuickSight at **SPICE** instead of re-running the same Athena queries on every dashboard load.
+*   **S3**:
+    *   Expire **Iceberg snapshots** and remove **orphan files**, since old snapshots silently keep deleted data billable.
+    *   Transition the raw zone to **Glacier Deep Archive** sooner.
+    *   Avoid Intelligent-Tiering monitoring fees on tiny objects (under 128 KB, which never tier anyway).
+    *   *Give up*: Shorter time travel and 12–48 hour retrieval for old raw data.
+
+### Follow-Up 3: How do you migrate existing Hive-style Parquet tables to Apache Iceberg with zero downtime for analysts?
+**Answer**: 
+1.  Put a **stable name** in front of consumers: analysts and QuickSight query an **Athena view** or a Glue table name, not the physical table.
+2.  Create the Iceberg table with a Spark **`snapshot`/`add_files`** procedure in Glue. This builds Iceberg metadata over the existing Parquet files without rewriting data. Alternatively, use Athena **CTAS** when you also want to repartition.
+3.  **Dual-run** the Glue ETL so new data lands in both tables. Validate row counts and aggregates.
+4.  Grant access on the new table with **Lake Formation tag-based access control (LF-Tags)** so row and column policies carry over automatically.
+5.  **Atomically repoint the view** to the Iceberg table. Keep the old table read-only for rollback, then retire it.
+
+### Follow-Up 4: The Glue ETL pipeline fails for a day. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: This is contained by design. **Firehose keeps landing data in the S3 Raw Zone** because ingestion is decoupled from transformation. The **Analytics Zone goes stale**, so Athena, Redshift Spectrum, and QuickSight show yesterday's numbers. Nothing is lost or corrupted, because **Iceberg commits are atomic** and partial writes are never visible.
+*   **Detection**: Set **EventBridge** rules on Glue job state `FAILED` or `TIMEOUT` to alert, and add a **data-freshness metric** (max event time in the analytics table) to catch silent no-op runs.
+*   **Recovery**: Fix the job and re-run. **Job bookmarks** and idempotent `MERGE INTO` upserts reprocess the backlog without duplicates.
+*   **Caveat**: Replay only works while raw files are still in S3 Standard. Keep the raw-zone lifecycle transition to **Deep Archive** longer than your worst-case recovery window.
+
+### Follow-Up 5: An upstream team renames a column and changes another column's type without warning. How does the lake handle schema evolution?
+**Answer**: 
+*   **Iceberg tracks columns by ID, not by name.** Renames, adds, drops, reorders, and safe **type widening** (`int` to `long`, `float` to `double`) are metadata-only changes with **no data rewrite**, and old snapshots stay readable.
+*   **Incompatible changes** (e.g., `string` to `int`) aren't in-place. Add a new column, backfill it in Glue, and deprecate the old one through a view.
+*   **Prevent surprises**: Register producer schemas in the **AWS Glue Schema Registry** with **BACKWARD** compatibility so breaking changes are rejected at the producer. Have the Glue job compare incoming schemas to the catalog and **quarantine** mismatched records to an error prefix instead of crashing.
+*   **Governance**: Verify that **Lake Formation** column-level grants and masks still apply to renamed or new columns. A new PII column must be tagged before analysts can see it.
+*   The **raw zone** keeps the original payloads, so any bad mapping can be reprocessed.

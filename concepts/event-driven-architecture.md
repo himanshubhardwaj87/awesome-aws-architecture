@@ -79,3 +79,33 @@ When a worker retrieves a message from an SQS queue, the message remains in the 
 **Answer**: 
 *   Choose **Amazon SQS FIFO** when you have a transactional workflow where message order is critical and you want elastic, serverless queues without managing infrastructure capacity. SQS FIFO is limited to 300 messages/sec (or 3,000/sec with batching).
 *   Choose **Amazon Kinesis Data Streams** when you have massive streaming data inputs (like real-time clickstreams, IoT logs, or transaction logs) that exceed SQS FIFO limits. Kinesis handles gigabytes of data per second and supports multiple consumers reading the same stream concurrently (independent checkpointing).
+
+### Question 4: One bad message is blocking your SQS → Lambda pipeline and the queue age keeps growing. Walk me through it.
+**Answer**:
+1.  **Confirm**: `ApproximateAgeOfOldestMessage` is climbing, Lambda `Errors` is steady, and logs show the same `messageId` failing on every receive. That is a **poison message**.
+2.  **Why it hurts**: Without partial batch responses, one failure returns the *whole batch* to the queue. In a **FIFO** queue it also blocks every later message in that `MessageGroupId`.
+3.  **Fix the plumbing**: Add a **redrive policy** (`maxReceiveCount` 3–5) to a DLQ. Enable `ReportBatchItemFailures` so only the failed item is retried. Set visibility timeout to at least 6x the function timeout.
+4.  **Streams equivalent** (Kinesis/DynamoDB Streams): enable `BisectBatchOnFunctionError`, cap `MaximumRetryAttempts`, and configure an on-failure destination. Otherwise the shard stalls until the record expires.
+5.  **Recover**: Alarm on DLQ `ApproximateNumberOfMessagesVisible > 0`, fix the bug, then **redrive** the messages back to the source queue (console or `StartMessageMoveTask`). The consumer must be idempotent for this to be safe.
+
+### Question 5: EventBridge vs. SNS: when do you pick each?
+**Answer**:
+*   **Amazon SNS**: High-throughput, low-latency fan-out. It supports very large subscriber counts, FIFO topics for ordering, and native SMS/email/mobile push. Filtering is by message attributes or payload, and it is cheaper per million messages. Choose it for high-volume fan-out inside a domain (e.g., the SNS → SQS fan-out above).
+*   **Amazon EventBridge**: Rich content-based rules on any JSON field, schema registry and discovery, **archive & replay**, cross-account/cross-region buses, SaaS partner sources, API Destinations, and **Pipes**. The costs are higher per-event price, somewhat higher latency, and regional `PutEvents` quotas.
+*   **Rule of thumb**: EventBridge is the *integration backbone between bounded contexts and accounts*. SNS is the *high-rate fan-out* primitive. They are often combined: an EventBridge rule targets an SNS topic or SQS queue.
+
+### Question 6: Design an event pipeline that preserves ordering at 50,000 events/sec for account-ledger updates.
+**Answer**:
+*   **Order per key, never globally.** A global order serializes the whole system. Use `accountId` as the ordering key.
+*   **Option A: SQS FIFO in high-throughput mode** with `MessageGroupId = accountId`. Lambda processes different groups in parallel while keeping order within each group.
+*   **Option B: Kinesis Data Streams** (or **MSK**) with partition key `accountId`, with shards/partitions sized for throughput. Lambda's **ParallelizationFactor** (up to 10) keeps per-key order within a shard.
+*   **Consumers still need guards**: Store a per-account `version` and apply updates with a DynamoDB conditional write (`version = :expected`) so retries and redrives cannot apply out of order.
+*   **Watch hot keys**: A single very active account caps at one group's or shard's throughput. Detect it with CloudWatch Contributor Insights.
+
+### Question 7: How do you evolve event schemas without breaking consumers you don't control?
+**Answer**:
+1.  **Register contracts**: Use the **EventBridge Schema Registry** for EventBridge events. Use the **AWS Glue Schema Registry** (Avro/JSON Schema/Protobuf) for MSK/Kinesis, with a compatibility mode (`BACKWARD`/`FULL`) enforced at publish time.
+2.  **Additive-only changes**: New fields are optional with defaults. Never rename, retype or remove a field in place. Consumers act as *tolerant readers* and ignore unknown fields.
+3.  **Version the envelope**: Carry `detail-type` plus a `version` field in the event.
+4.  **Breaking change → new event type**: Publish `OrderPlaced.v2` alongside v1 and let consumers migrate on their own schedule. Retire v1 once CloudWatch metrics show no remaining rules or targets consuming it.
+5.  Back this up with consumer-driven contract tests (e.g., Pact) in CI, and EventBridge **archive & replay** to re-process history after a consumer fix.

@@ -164,3 +164,48 @@ graph TD
 **Answer**: 
 *   **VPC Peering** is point-to-point and not transitive. If you have on-premises connectivity to VPC A, and VPC A is peered with VPC B, you cannot route traffic from on-premises to VPC B. You must configure individual VPN/DX connections or peering relationships to every single VPC, creating a complex mesh network.
 *   **AWS Transit Gateway** acts as a centralized cloud router (hub-and-spoke model). You attach your Direct Connect connection, VPN links, and all VPCs directly to the Transit Gateway. It manages routing transitively across all connections from a central routing table, simplifying hybrid architectures.
+
+---
+
+## 🔁 Interviewer Follow-Up Drills
+
+Real interviews push past the first design. Practice defending it against these follow-ups.
+
+### Follow-Up 1: The on-premises data change rate grows 10x. What breaks first, and how do you fix it?
+**Answer**: 
+*   **First to break**: **Replication bandwidth, and with it the RPO.** Database replication and **Storage Gateway** block sync compete for the **Direct Connect** link, so `ReplicationLag` climbs past 1 minute. Worse, if DX fails, the backup **Site-to-Site VPN** (about 1.25 Gbps per tunnel) can't carry 10x the traffic, so failing over to the VPN silently breaks the RPO.
+*   **Fixes**:
+    1.  Upgrade to a larger DX port or a **LAG**, and add a **second DX at a different DX location** (the maximum-resiliency model).
+    2.  Move the VPN from the VGW onto the **Transit Gateway** and use **ECMP across multiple tunnels** to aggregate backup bandwidth.
+    3.  Size the Storage Gateway **upload buffer and cache disks** for the new write rate.
+*   **Failover side**: Scaling 1 node to 10x the fleet stresses EC2 capacity and snapshot hydration. Use **EBS Fast Snapshot Restore** and **On-Demand Capacity Reservations** in the DR region.
+
+### Follow-Up 2: Cut the DR bill by 40%. What do you change, and what do you give up?
+**Answer**: 
+*   **Direct Connect** (~$1,000/month baseline) is the biggest item. Downsize to a smaller **hosted connection**, or go VPN-only if steady replication bandwidth allows. *Give up*: Predictable latency and RPO headroom during bursts.
+*   **RDS replica**: Run it **Single-AZ** in steady state on a **Graviton Reserved Instance**, and convert to Multi-AZ after promotion. *Give up*: A few extra minutes of RTO, and exposure to an AZ failure during a disaster.
+*   **Compute**: Drop the always-on EC2 node and move to **Pilot Light** (AMIs and launch templates only, with 0 instances running). RTO rises but can stay under 1 hour if scale-out is automated.
+*   **Evaluate AWS Elastic Disaster Recovery (DRS)** to replace Storage Gateway and snapshot plumbing. It uses low-cost staging and launches recovery instances on demand.
+
+### Follow-Up 3: Leadership decides to exit the data center and make AWS the permanent primary. How do you cut over with (near) zero downtime?
+**Answer**: 
+1.  **Prep**: Lower the **Route 53 TTLs** days in advance. Scale the AWS environment to full production size and warm it with synthetic traffic.
+2.  **Sync**: Confirm `ReplicationLag` is near zero and Storage Gateway volumes are fully uploaded.
+3.  **Cutover window** (seconds of write freeze, not an outage): Stop writes on-prem by setting the app to read-only, wait for lag to reach 0, **promote the RDS replica** with an **SSM Automation** runbook, then flip Route 53 to AWS.
+4.  **Fallback path**: Immediately **reverse replication** so the on-prem PostgreSQL becomes a replica of AWS. You can fail back if issues appear.
+5.  Decommission on-prem only after a stability window. Resize DX or replace it with a VPN once replication traffic stops.
+
+### Follow-Up 4: The Direct Connect link fails, but the data center is still up. What's the blast radius, and how do you recover?
+**Answer**: 
+*   **Blast radius**: **End users are unaffected**, because they reach the on-prem app over the internet through Route 53. The impact is on **DR readiness**: replication moves to the backup VPN with lower bandwidth and higher latency, so `ReplicationLag` grows and the **RPO < 1 minute guarantee is at risk**. If a real disaster hits during this window, you lose more data.
+*   **Automatic path failover**: Run **BGP with BFD** on DX for sub-second detection, and use AS-path prepending or lower local preference so the VPN is preferred only when DX is down.
+*   **Detection**: Set CloudWatch alarms on DX `ConnectionState`, VPN `TunnelState`, and RDS `ReplicationLag`, and declare a "DR degraded" state to the business.
+*   **Recovery**: Fix the carrier or cross-connect fault. Long term, add a **second DX connection** so one fiber cut doesn't downgrade DR posture.
+
+### Follow-Up 5: Auditors require a full DR test every quarter with zero impact on production and without breaking replication. How do you run it?
+**Answer**: 
+*   **Never promote the live replica for a test.** Promotion permanently severs replication. Instead, **snapshot the RDS replica** (or use Storage Gateway volume snapshots) and restore **copies** into an **isolated test VPC or subnets**.
+*   The test VPC has **no route back to on-premises** (separate Transit Gateway route table), so test instances can't write to production systems.
+*   Launch the app tier from the same launch templates and AMIs, and use a **Route 53 private hosted zone** or a test subdomain so real users never resolve to the test stack.
+*   Drive the test with an **SSM Automation runbook** that times each step, producing **measured RTO and RPO evidence** for auditors. Optionally add **AWS Fault Injection Service** experiments.
+*   Tear everything down automatically afterward to control cost.
