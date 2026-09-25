@@ -284,7 +284,7 @@ terraform {
     key          = "network/app.tfstate"
     region       = "us-east-1"
     encrypt      = true
-    use_lockfile = true   # S3 native locking (TF 1.10+); older versions: dynamodb_table
+    use_lockfile = true   # S3 native locking (GA in TF 1.11, experimental in 1.10); older versions: dynamodb_table
   }
 }
 

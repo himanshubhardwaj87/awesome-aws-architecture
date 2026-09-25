@@ -23,8 +23,8 @@ flowchart TD
     SCP -->|"Yes"| RCP{"RCP allows? (resource's org)"}
     RCP -->|"No"| Deny
     RCP -->|"Yes"| RBP{"Resource-based policy allows?"}
-    RBP -->|"Yes, same account"| Allow["ALLOW"]
-    RBP -->|"No / cross-account"| IBP{"Identity-based policy allows?"}
+    RBP -->|"Yes, same account, names the user or role-session ARN"| Allow["ALLOW"]
+    RBP -->|"No / cross-account / names the role ARN"| IBP{"Identity-based policy allows? (or same-account resource policy naming the role ARN)"}
     IBP -->|"No"| Deny
     IBP -->|"Yes"| PB{"Permission boundary allows?"}
     PB -->|"No"| Deny

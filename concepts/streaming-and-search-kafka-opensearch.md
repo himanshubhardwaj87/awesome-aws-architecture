@@ -108,7 +108,7 @@ graph TD
 ### Sizing Guidance
 *   Target **10-50 GB per shard**; too many small shards waste heap and slow the cluster.
 *   Primary shard count is **fixed at index creation** (changing it requires reindex or split), so plan up front or use time-based indices with rollover.
-*   Use at least **1 replica** across AZs. Use dedicated **master nodes** (3) for cluster stability.
+*   Use at least **1 replica** across AZs. Use 3 dedicated **cluster manager** nodes (formerly "master" nodes) for cluster stability.
 *   Time-series data: use **Index State Management (ISM)** policies for hot, warm, UltraWarm/cold, then delete.
 
 ---
@@ -129,7 +129,7 @@ Use cases: log analytics, application search, security analytics (SIEM), and vec
 
 ```mermaid
 graph LR
-    Apps["EC2 / EKS / Lambda Logs"] -->|"Agent or Subscription Filter"| KDF["Kinesis Data Firehose"]
+    Apps["EC2 / EKS / Lambda Logs"] -->|"Agent or Subscription Filter"| KDF["Amazon Data Firehose"]
     KDF -->|"Transform via Lambda"| OS["OpenSearch Service"]
     KDF -->|"Backup raw logs"| S3Raw["S3 Raw Bucket"]
     OS --> Dash["OpenSearch Dashboards"]
@@ -178,8 +178,8 @@ Pick **MSK** when you need the Kafka API and ecosystem (Connect, Streams, existi
 
 ### Question 5: How do you design a scalable, cost-effective log analytics platform on AWS?
 **Answer**:
-Ship logs via CloudWatch subscription filters or agents to **Kinesis Data Firehose** (or MSK for high volume), with a Lambda transform, delivering to **OpenSearch Service** and backing up raw data to **S3**. Use time-based indices with ISM: hot for recent data, **UltraWarm** for older, then delete or archive to S3. Keep shards at 10-50 GB, run 3 dedicated masters across 3 AZs, and secure with VPC plus fine-grained access control. Query cold history with Athena instead of keeping it in the cluster.
+Ship logs via CloudWatch subscription filters or agents to **Amazon Data Firehose** (or MSK for high volume), with a Lambda transform, delivering to **OpenSearch Service** and backing up raw data to **S3**. Use time-based indices with ISM: hot for recent data, **UltraWarm** for older, then delete or archive to S3. Keep shards at 10-50 GB, run 3 dedicated cluster manager nodes across 3 AZs, and secure with VPC plus fine-grained access control. Query cold history with Athena instead of keeping it in the cluster.
 
-### Question 7: EMR, Glue, or Athena for a new data lake transformation and query workload?
+### Question 6: EMR, Glue, or Athena for a new data lake transformation and query workload?
 **Answer**:
 Use **Glue** for serverless ETL and the Data Catalog when jobs are standard Spark and you want no cluster management. Use **EMR** when you need custom frameworks, fine control of Spark/Hive/Flink, long-running clusters, or Spot-optimized cost at large scale. Use **Athena** for ad-hoc SQL on S3 with no infrastructure; store data as partitioned Parquet to reduce scanned bytes and cost. They often combine: Glue ETL then Athena queries, governed by Lake Formation.

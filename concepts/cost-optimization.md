@@ -94,7 +94,7 @@ To mitigate interruptions in production:
 
 ### Question 5: What is Model Distillation, and how does it reduce Generative AI costs in production?
 **Answer**: 
-Model Distillation is an optimization technique where a larger, high-performing "teacher" model (e.g., Claude 3.5 Sonnet or Llama 3.3 70B) is used to generate high-quality outputs or labels for a domain-specific dataset. A much smaller, cheaper "student" model (e.g., Llama 3.2 1B or a local Small Language Model like Gemma) is then fine-tuned on this dataset.
+Model Distillation is an optimization technique where a larger, high-performing "teacher" model (e.g., Claude Sonnet or a large open-weight model) is used to generate high-quality outputs or labels for a domain-specific dataset. A much smaller, cheaper "student" model (e.g., a 1–3B open-weight Small Language Model) is then fine-tuned on this dataset.
 
 Benefits include:
 *   **Drastic Cost Reductions**: In production, the student model processes requests at **10x to 50x lower cost** than the teacher model.
@@ -108,6 +108,6 @@ Benefits include:
     *   *Standard Workloads*: Reuse existing relational databases via extensions like **pgvector on Amazon Aurora PostgreSQL** to avoid managing a separate database engine.
     *   *Low-Cost/Batch*: Leverage **Amazon S3-based vector databases** (e.g., LanceDB storing index files on S3) to achieve maximum cost savings at the expense of slightly higher retrieval latency.
 2.  **Scale Inference Endpoints to Zero**: For self-hosted open-source models deployed via SageMaker or EC2, configure auto-scaling policies to scale instances down to zero when idle, and utilize Spot Instances (such as G5/G6 families) in non-production environments to save up to 90%.
-3.  **Task-Model Alignment**: Route low-complexity tasks (e.g., classification, basic summarization) to cheap models (e.g., Claude 3.5 Haiku) and reserve expensive models (e.g., Claude 3.5 Opus) exclusively for complex multi-step reasoning.
+3.  **Task-Model Alignment**: Route low-complexity tasks (e.g., classification, basic summarization) to cheap models (e.g., Claude Haiku) and reserve expensive models (e.g., Claude Opus) exclusively for complex multi-step reasoning.
 4.  **Batch Inference**: Use Bedrock Batch Inference for non-real-time tasks (like offline document summarization or daily reports) to receive a 50% discount compared to real-time API pricing.
 

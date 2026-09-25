@@ -203,8 +203,9 @@ Assuming a baseline database size of **500 GB** and average traffic of **10,000 
 ### 2. Pilot Light (~$400/month)
 *   *us-east-1*: DynamoDB Global Table replication active ($250/month). EC2 instances are off; AMI storage is minimal ($10/month). API Gateway & Lambda are billed per request (zero idle cost). Route 53 active health checks ($140/month).
 
-### 3. Warm Standby (~$1,200/month)
-*   *us-east-1*: DynamoDB Global Table replication active ($250/month). 1 active EC2 instance running 24/7 ($150/month). ALB running ($25/month). API Gateway & Lambda active. Route 53 ARC health routing and check fees (~$775/month).
+### 3. Warm Standby (~$600/month)
+*   *us-east-1*: DynamoDB Global Table replication active ($250/month). 1 active EC2 instance running 24/7 ($150/month). ALB running ($25/month). API Gateway & Lambda active (billed per request). Route 53 failover records and health checks (~$140/month).
+*   *Optional*: **ARC routing controls** add **~$1,825/month per cluster** ($2.50/hour). One cluster hosts many routing controls, so it is usually shared across many applications rather than bought for one.
 
 ### 4. Multi-Site Active-Active (~$2,200/month)
 *   *us-east-1*: Fully replicated production environment ($1,000/month). DynamoDB Global Table active-active writes ($450/month). Route 53 routing and Global Accelerator traffic routing ($750/month).
@@ -266,10 +267,10 @@ Real interviews push past the first design. Practice defending it against these 
     3.  Pre-warm DynamoDB on-demand tables with **warm throughput** to avoid throttling on sudden spikes.
     4.  Question the **EC2 web to API Gateway** extra hop. Serving the API directly (or with CloudFront to API Gateway) removes a scaling tier.
 
-### Follow-Up 2: You're on Warm Standby (~$1,200/month DR). Leadership wants 40% off. What do you change, and what do you give up?
+### Follow-Up 2: You're on Warm Standby (~$600/month DR). Leadership wants a third off. What do you change, and what do you give up?
 **Answer**: 
 *   **Option A: Move to Pilot Light (~$400/month).** Keep the DynamoDB Global Table replica and the AMIs, but turn off the always-on EC2 node and the idle ALB. *Give up*: RTO grows from ~5–10 minutes to ~15–30 minutes, and failover becomes scripted rather than automatic.
-*   **Option B: Stay Warm Standby but trim.** The **Route 53 ARC and health-check fees** (~$775/month) are the biggest line item. Reduce the number of health checks and ARC components to what failover actually needs, and run the single standby EC2 on **Graviton**. *Give up*: Less granular readiness auditing.
+*   **Option B: Stay Warm Standby but trim.** Run the standby EC2 on **Graviton**, collapse health checks into one calculated health check per endpoint, and if you use ARC, share one routing-control cluster across applications (at ~$1,825/month it dwarfs everything else here). *Give up*: Less granular readiness auditing, and this alone usually saves only 10–15%.
 *   **Never trade away** Global Tables replication. It is what keeps RPO in seconds for every strategy above Backup & Restore.
 
 ### Follow-Up 3: How do you upgrade from Backup & Restore to Warm Standby (or Active-Active) with zero downtime?

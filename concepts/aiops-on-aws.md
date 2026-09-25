@@ -46,7 +46,7 @@ graph TD
         CW["Amazon CloudWatch Agent"]
         CT["AWS CloudTrail Logs"]
         KinesisStream(("Kinesis Data Streams"))
-        Firehose["Kinesis Data Firehose"]
+        Firehose["Amazon Data Firehose"]
     end
     
     %% Storage & Analytics
@@ -181,7 +181,7 @@ DevOps Guru does not look at metrics in isolation. It uses **correlated anomaly 
 ### Question 2: How would you design a custom log anomaly detection pipeline on AWS using Amazon SageMaker?
 **Answer**:
 To detect custom log anomalies (e.g., identifying novel error patterns in application logs):
-1.  **Ingestion**: Application containers stream logs to CloudWatch Logs, which are forwarded to Amazon S3 via Amazon Kinesis Data Firehose in Parquet format.
+1.  **Ingestion**: Application containers stream logs to CloudWatch Logs, which are forwarded to Amazon S3 via Amazon Data Firehose in Parquet format.
 2.  **Preprocessing**: Use an AWS Glue job or SageMaker processing container to tokenize log entries and convert text messages into vector embeddings using natural language processing (NLP) models (e.g., Word2Vec or BERT).
 3.  **Model Training**: Train a **SageMaker Random Cut Forest (RCF)** or K-Means clustering model. The model groups normal log structures together.
 4.  **Inference**: A streaming Lambda function reads new logs, converts them to vectors, and queries the SageMaker endpoint. If the distance to the nearest cluster exceeds a threshold (an unknown log pattern or sudden burst of error syntax), the Lambda sends an alert notification to EventBridge.
