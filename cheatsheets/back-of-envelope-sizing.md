@@ -92,10 +92,10 @@ Classic figures (popularized by Jeff Dean / Peter Norvig), rounded for modern ha
 | | Retention | 24 h default, up to 365 days | |
 | **S3** | Request rate per prefix | 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD per second | Scales with more prefixes; no limit on number of prefixes |
 | | Single PUT | 5 GB | Use multipart above ~100 MB (max 10,000 parts) |
-| | Max object size | 5 TB historically (AWS raised this in late 2025; verify) | |
+| | Max object size | 50 TB (raised from 5 TB in Dec 2025) | |
 | **SQS** | Standard throughput | Nearly unlimited | At-least-once, best-effort ordering |
 | | FIFO throughput | 300 API calls/s per action (3,000 msgs/s with batching of 10) | High-throughput FIFO mode is much higher |
-| | Message size | 256 KB historically; raised to 1 MiB in 2025 (verify) | Larger → S3 pointer (extended client) |
+| | Message size | 1 MiB (raised from 256 KB in Aug 2025) | Larger → S3 pointer (extended client) |
 | | Retention | 4 days default, 60 s - 14 days | |
 | | Visibility timeout | 30 s default, max 12 h | |
 | | Long polling wait | Max 20 s | |
