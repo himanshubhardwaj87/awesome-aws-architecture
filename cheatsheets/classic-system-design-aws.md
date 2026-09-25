@@ -257,13 +257,13 @@ graph TD
     
     SenderHigh -->|4. Send Email| SES[Amazon SES]
     SenderHigh -->|4. Send SMS| SNS[Amazon SNS]
-    SenderHigh -->|4. Send Push| Pinpoint[Amazon Pinpoint]
+    SenderHigh -->|4. Send Push| EUM[AWS End User Messaging]
 ```
 
 ### Architectural Details
 *   **Scale**: Send 1B notifications/day (Email, SMS, Push alerts).
 *   **Mechanism**: Decouple ingest from delivery. Incoming payloads are classified into Priority Queues (e.g., SQS High Priority for OTP/2FA, SQS Low Priority for Marketing).
-*   **AWS Delivery Integrations**: SNS handles SMS and push alerts, SES handles transactional emails, and Amazon Pinpoint handles campaign targeting.
+*   **AWS Delivery Integrations**: SNS handles fan-out alerts, **AWS End User Messaging** handles SMS and mobile push, and SES handles email. Keep campaign targeting and segmentation in your own service: Amazon Pinpoint's engagement features reach end of support on October 30, 2026.
 *   **Failure Modes**: Downstream provider throttling (e.g., carrier SMS block). Mitigation: Configure SQS Dead Letter Queues (DLQs) to retry failed notifications automatically with exponential backoff.
 
 ---
@@ -275,13 +275,13 @@ graph TD
 *   **Absorb it at the edge**: Return a `302` with `Cache-Control: max-age` so **CloudFront** serves most hits without reaching the origin. A `301` is cached by browsers forever, which is cheaper but loses click analytics and makes link edits impossible.
 *   **Protect Redis**: A single key lives on one shard. Add read replicas, plus a small in-process LRU cache inside the Lambda execution environment with a few seconds of TTL.
 *   **Protect DynamoDB**: Adaptive capacity helps, but put **DAX** in front of reads for hot items.
-*   **Keep analytics off the hot path**: Send click events asynchronously to **Kinesis Data Firehose → S3**.
+*   **Keep analytics off the hot path**: Send click events asynchronously to **Amazon Data Firehose → S3**.
 
 ### Question 2: How does your WhatsApp design guarantee per-chat ordering and delivery to users who are offline?
 **Answer**:
 *   A standard SQS queue does not preserve order, so give each message a **per-chat sequence number**. Assign it with a DynamoDB atomic counter on `chatId`, or use SQS FIFO with `MessageGroupId = chatId`.
 *   Persist every message to DynamoDB (`chatId`, `seq`) **before** attempting delivery. The history table is the source of truth, and the WebSocket push is best effort.
-*   If the Redis session lookup finds no `connectionId`, or `PostToConnection` returns `410 Gone`, mark the message undelivered and send a push notification via SNS/Pinpoint.
+*   If the Redis session lookup finds no `connectionId`, or `PostToConnection` returns `410 Gone`, mark the message undelivered and send a push notification via SNS or AWS End User Messaging.
 *   On reconnect, the client sends its last acknowledged `seq` per chat and the server replays the gap. Clients dedupe by `messageId`, which makes retries safe.
 
 ### Question 3: A tenant sending steady traffic well under its per-second limit still gets bursts of 429s. The limiter's Lua script runs `INCRBY key 1` then `EXPIRE key 1` on every allowed request, using a key of `rl:{tenant}`. Walk me through it.
@@ -313,7 +313,7 @@ graph TD
 
 ### Question 6: How do you stop a marketing blast from delaying OTP messages, and avoid spamming a user with duplicates?
 **Answer**:
-*   **Isolation**: Keep separate SQS queues, separate Lambda **event source mapping maximum concurrency**, and separate SES configuration sets / SNS origination numbers for transactional vs. marketing traffic. Then a 50M-message campaign cannot starve OTPs.
+*   **Isolation**: Keep separate SQS queues, separate Lambda **event source mapping maximum concurrency**, and separate SES configuration sets and separate End User Messaging SMS origination identities (phone numbers) for transactional vs. marketing traffic. Then a 50M-message campaign cannot starve OTPs.
 *   **Provider limits**: Throttle the marketing workers to the SES sending rate and SMS throughput quotas, rather than letting throttling errors pile up in the DLQ.
 *   **Dedup**: Build an idempotency key from `userId + templateId + eventId` and store it in DynamoDB with a TTL.
 *   **Per-user limits**: Enforce frequency caps (e.g., max 3 marketing messages/day) and honor opt-out and preference data before enqueueing.

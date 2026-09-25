@@ -62,8 +62,8 @@ graph TD
 
 | Feature | RDS | Aurora |
 | :--- | :--- | :--- |
-| **Storage** | EBS volume per instance (up to 64 TiB) | Shared cluster volume, 6 copies across 3 AZs, auto-grows to 128 TiB |
-| **Replicas** | Up to 5 read replicas (async), separate storage | Up to 15 replicas sharing storage, typically under 100 ms lag |
+| **Storage** | EBS volume per instance (up to 64 TiB) | Shared cluster volume, 6 copies across 3 AZs, auto-grows to 128 TiB (256 TiB on Aurora PostgreSQL 15.13 / 16.9 / 17.5+) |
+| **Replicas** | Up to 15 read replicas on MySQL, MariaDB and PostgreSQL (async), separate storage | Up to 15 replicas sharing storage, typically under 100 ms lag |
 | **Failover** | Multi-AZ standby, typically 60-120 s | Promote a replica, typically under 30 s |
 | **Multi-AZ** | Synchronous standby (not readable); Multi-AZ DB cluster has 2 readable standbys | Built into storage layer |
 | **Engines** | 6 engines | MySQL and PostgreSQL only |
@@ -71,7 +71,7 @@ graph TD
 
 ### Key Aurora Features
 
-*   **Aurora Global Database**: One primary region plus up to 5 read-only secondary regions, with storage-level replication (typically under 1 second lag). Gives cross-region reads and a **RPO of about 1 second and RTO under 1 minute** on regional failover.
+*   **Aurora Global Database**: One primary region plus up to 10 read-only secondary regions, with storage-level replication (typically under 1 second lag). Gives cross-region reads and a **RPO of about 1 second and RTO under 1 minute** on regional failover.
 *   **Aurora Serverless v2**: Scales in fine-grained **ACUs** (Aurora Capacity Units) in place, without dropping connections; can scale down to 0 ACU with auto-pause. Ideal for variable, unpredictable, or dev/test workloads.
 
 ### RDS Proxy
@@ -127,7 +127,7 @@ Store multiple entity types in **one table** using generic `PK`/`SK` attributes 
 
 *   **DAX (DynamoDB Accelerator)**: In-memory write-through cache giving microsecond reads with an API-compatible client. It only helps eventually consistent reads and read-heavy, repetitive workloads.
 *   **DynamoDB Streams**: Ordered, 24-hour log of item changes; drives Lambda triggers, materialized views, and cross-service sync. **Kinesis Data Streams for DynamoDB** offers longer retention and more consumers.
-*   **Global Tables**: Multi-region, multi-active replication (last-writer-wins).
+*   **Global Tables**: Multi-region, multi-active replication. The default is multi-Region *eventual* consistency (last-writer-wins). **Multi-Region strong consistency** (MRSC) gives strongly consistent reads in every Region, with an RPO of zero, at the cost of higher write latency; it needs three Regions (or two plus a witness).
 
 ---
 

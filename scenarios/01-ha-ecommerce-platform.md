@@ -190,7 +190,7 @@ Real interviews push past the first design. Practice defending it against these 
 1.  Create an **RDS Blue/Green Deployment**. Aurora builds a synchronized green cluster on the new major version using logical replication.
 2.  Run regression and load tests against the green endpoint while production stays on blue.
 3.  Before switchover, **pause the Lambda order processor** (disable the SQS event source mapping). New checkouts keep landing safely in SQS.
-4.  Trigger switchover, which typically completes in under a minute. **RDS Proxy** holds client connections, so ECS tasks see a brief pause instead of errors.
+4.  Trigger switchover, which typically completes in under a minute. **RDS Proxy** (supported with Blue/Green since April 2026) detects the switchover and redirects connections to green without waiting for DNS, so ECS tasks see a brief pause instead of errors. The blue cluster must already be a proxy target *before* you create the deployment, and writes can briefly return read-only errors while blue is fenced.
 5.  Re-enable the event source mapping so Lambda drains the backlog. Keep the blue cluster available until you've validated the result.
 
 ### Follow-Up 4: The ElastiCache Redis cluster fails. What's the blast radius, and how do you recover?

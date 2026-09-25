@@ -69,7 +69,7 @@ Classic figures (popularized by Jeff Dean / Peter Norvig), rounded for modern ha
 | Round trip us-east-1 ↔ ap-southeast-2 | ~180-220 ms | Why global apps need regional read replicas / edge |
 | Lambda cold start | ~100 ms to >1 s | Depends on runtime, package size, VPC, SnapStart |
 
-**Takeaway:** a cross-region call costs about the same as ~100,000 memory reads. Chatty cross-region designs fail latency SLOs before they fail anything else.
+**Takeaway:** a cross-region call costs about the same as ~1 million memory reads (70–90 ms ÷ 100 ns ≈ 700,000–900,000). Chatty cross-region designs fail latency SLOs before they fail anything else.
 
 ---
 
@@ -81,7 +81,7 @@ Classic figures (popularized by Jeff Dean / Peter Norvig), rounded for modern ha
 | | Memory | 128 MB - 10,240 MB | vCPU scales with memory (~1 vCPU at 1,769 MB, up to 6 vCPU) |
 | | Ephemeral `/tmp` | 512 MB - 10 GB | |
 | | Concurrency per region | 1,000 (default) | Soft limit; new accounts may start lower |
-| | Sync payload | 6 MB request/response | Async payload is smaller; check current value |
+| | Sync payload | 6 MB request/response | Async payload 1 MB (raised from 256 KB in Oct 2025; each 64 KB over 256 KB bills as an extra request) |
 | | Deployment package | 50 MB zipped / 250 MB unzipped; 10 GB container image | |
 | **DynamoDB** | Max item size | 400 KB | Includes attribute names. Big blobs → S3 + pointer |
 | | 1 WCU | 1 write/s for item ≤ 1 KB | Round **up** per KB. Transactional = 2x |
@@ -92,10 +92,10 @@ Classic figures (popularized by Jeff Dean / Peter Norvig), rounded for modern ha
 | | Retention | 24 h default, up to 365 days | |
 | **S3** | Request rate per prefix | 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD per second | Scales with more prefixes; no limit on number of prefixes |
 | | Single PUT | 5 GB | Use multipart above ~100 MB (max 10,000 parts) |
-| | Max object size | 5 TB historically (AWS raised this in late 2025; verify) | |
+| | Max object size | 50 TB (raised from 5 TB in Dec 2025) | |
 | **SQS** | Standard throughput | Nearly unlimited | At-least-once, best-effort ordering |
 | | FIFO throughput | 300 API calls/s per action (3,000 msgs/s with batching of 10) | High-throughput FIFO mode is much higher |
-| | Message size | 256 KB historically; raised to 1 MiB in 2025 (verify) | Larger → S3 pointer (extended client) |
+| | Message size | 1 MiB (raised from 256 KB in Aug 2025) | Larger → S3 pointer (extended client) |
 | | Retention | 4 days default, 60 s - 14 days | |
 | | Visibility timeout | 30 s default, max 12 h | |
 | | Long polling wait | Max 20 s | |
@@ -256,8 +256,8 @@ flowchart LR
 
 - Requests/day = 10M × 20 = 200M
 - Average QPS = 200M / 86,400 ≈ **2,300 QPS** (shortcut: 200 × 11.6 ≈ 2,300)
-- Peak QPS = 2,300 × 4 ≈ **~9,300 QPS**, call it **10K QPS**
-- Reads ≈ 9,000 QPS, writes ≈ 900 QPS at peak
+- Peak QPS = 2,300 × 4 ≈ **~9,200 QPS**, call it **10K QPS**
+- At the rounded 10K peak (10:1): reads ≈ 9,100 QPS, writes ≈ 900 QPS
 
 **Design implications:**
 
@@ -292,7 +292,7 @@ flowchart LR
 
 1. **Memory:** a 200 GB working set should fit in buffer cache → writer needs ~256 GB+ RAM (for example an r-family 8xlarge class instance).
 2. **Reads:** 40K reads/s on one instance is risky → offload to replicas and a cache. Aurora supports up to 15 low-lag replicas sharing one storage volume; RDS read replicas are async copies with their own storage.
-3. **Storage growth:** 2 TB + 100 GB × 36 months ≈ 5.6 TB in 3 years. Fine for both (RDS gp3/io2 up to 64 TiB; Aurora auto-grows, 128 TiB default max, verify current).
+3. **Storage growth:** 2 TB + 100 GB × 36 months ≈ 5.6 TB in 3 years. Fine for both (RDS gp3/io2 up to 64 TiB; Aurora auto-grows to 128 TiB, or 256 TiB on Aurora PostgreSQL 15.13 / 16.9 / 17.5+).
 4. **I/O cost (Aurora Standard):** suppose 15,000 I/O ops/s average → 15,000 × 2.6M s ≈ 39B I/Os × ~$0.20 per million ≈ **$7,800/month** in I/O alone. When I/O exceeds ~25% of total Aurora spend, **Aurora I/O-Optimized** is usually cheaper.
 5. **Failover:** RDS Multi-AZ (instance) failover is typically 60-120 s; Aurora typically under 30 s (faster with RDS Proxy).
 6. **Connections:** thousands of Lambda functions or containers → put **RDS Proxy** in front regardless.

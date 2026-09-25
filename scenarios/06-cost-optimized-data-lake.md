@@ -29,7 +29,7 @@ This data stack implements a modern **Lakehouse Architecture**, utilizing server
 ### Interactive Mermaid Blueprint
 ```mermaid
 graph TD
-    Sources[Log Streams, Databases, IoT Telemetry] -->|Raw Files Ingest| Firehose[Amazon Kinesis Data Firehose]
+    Sources[Log Streams, Databases, IoT Telemetry] -->|Raw Files Ingest| Firehose[Amazon Data Firehose]
     
     subgraph Data_Lake_S3_Storage [Data Lake Storage: S3 Bucket Tiers]
         Firehose -->|1. Land JSON/CSV| S3_Raw[(S3 Raw Zone - Standard Tiers)]
@@ -61,7 +61,7 @@ graph TD
 | Service | Architectural Role | Scoped Purpose |
 | :--- | :--- | :--- |
 | **Amazon S3** | Object Data Lake. | Serves as the primary storage layer, leveraging intelligent-tiering to optimize costs. |
-| **Kinesis Data Firehose**| Ingestion Stream Engine. | Ingests, aggregates, and flushes streaming data directly to S3. |
+| **Amazon Data Firehose**| Ingestion Stream Engine. | Ingests, aggregates, and flushes streaming data directly to S3. |
 | **AWS Glue** | Serverless ETL. | Transforms unstructured JSON data into optimized Apache Iceberg (Parquet) formats. |
 | **AWS Glue Data Catalog**| Central Metadata Registry.| Indexes database schemas and partition locations for analytical engines. |
 | **AWS Lake Formation** | Data Governance Center. | Enforces fine-grained, row/column-level access control permissions. |
@@ -71,7 +71,7 @@ graph TD
 ---
 
 ## 5. Step-by-Step Design Walkthrough
-1.  **Ingestion**: Multi-source logs and streaming payloads are collected by **Amazon Kinesis Data Firehose**, which aggregates events and writes raw CSV/JSON files directly to the **S3 Raw Zone**.
+1.  **Ingestion**: Multi-source logs and streaming payloads are collected by **Amazon Data Firehose**, which aggregates events and writes raw CSV/JSON files directly to the **S3 Raw Zone**.
 2.  **ETL Processing**: S3 upload triggers an **AWS Glue ETL Spark Job**. The job cleanses records, removes duplicate fields, and converts data into **Apache Iceberg** table format (backing data with column-oriented **Apache Parquet** files).
 3.  **Analytics Storage**: The optimized Iceberg tables are stored in the **S3 Analytics Zone** configured with **S3 Intelligent-Tiering** to optimize costs dynamically as files age.
 4.  **Metadata Registration**: Glue registers the Iceberg schema and file partition updates inside the **AWS Glue Data Catalog**.
@@ -175,7 +175,7 @@ Real interviews push past the first design. Practice defending it against these 
 *   **S3**:
     *   Expire **Iceberg snapshots** and remove **orphan files**, since old snapshots silently keep deleted data billable.
     *   Transition the raw zone to **Glacier Deep Archive** sooner.
-    *   Avoid Intelligent-Tiering monitoring fees on tiny objects (under 128 KB, which never tier anyway).
+    *   Don't count on Intelligent-Tiering for tiny objects: objects under 128 KB are never monitored (so no monitoring fee), but they also never move down a tier and stay at Frequent Access rates. Compact small files (Iceberg `rewrite_data_files`) instead.
     *   *Give up*: Shorter time travel and 12–48 hour retrieval for old raw data.
 
 ### Follow-Up 3: How do you migrate existing Hive-style Parquet tables to Apache Iceberg with zero downtime for analysts?

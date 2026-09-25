@@ -191,7 +191,7 @@ Deep dive: [Terraform](../concepts/terraform.md)
 | Question | Answer |
 | :--- | :--- |
 | What is Terraform state for? | It maps configuration to real resource IDs and tracks metadata so Terraform can compute diffs. |
-| What is the recommended remote backend on AWS? | S3 with versioning and encryption. Use S3 native locking (`use_lockfile`, Terraform 1.10+); DynamoDB locking is the legacy approach. |
+| What is the recommended remote backend on AWS? | S3 with versioning and encryption. Use S3 native locking (`use_lockfile`, GA in Terraform 1.11); DynamoDB locking is the legacy approach. |
 | Is a `sensitive` value safe in state? | No. It is only hidden in CLI output and is still stored in plaintext in state, so protect the backend. |
 | `count` vs `for_each`? | `count` indexes by number (removing a middle item shifts others); `for_each` keys by map or set value, which is more stable. |
 | What replaced `terraform taint`? | `terraform apply -replace=<address>`. |
@@ -214,7 +214,7 @@ Deep dive: [Event-Driven Architecture](../concepts/event-driven-architecture.md)
 | What is the SQS visibility timeout? | 30 seconds by default, max 12 hours. Set it above your processing time. |
 | What is SQS message retention? | 4 days by default, configurable from 60 seconds to 14 days. |
 | What is the max SQS long-poll wait? | 20 seconds. |
-| What is the SQS max message size? | Historically 256 KB; raised to 1 MiB in 2025 **(verify)**. Use S3 pointers for bigger payloads. |
+| What is the SQS max message size? | 1 MiB (raised from 256 KB in Aug 2025). Use S3 pointers for bigger payloads. |
 | SNS vs EventBridge? | SNS is high-throughput pub/sub; EventBridge adds content-based routing rules, schema registry, SaaS sources, and archive/replay. |
 | SQS vs Kinesis? | SQS: a queue, where messages are deleted after processing. Kinesis: an ordered, replayable stream with multiple consumers per shard. |
 | What is the Kinesis shard throughput? | Write: 1 MB/s or 1,000 records/s. Read: 2 MB/s shared, or 2 MB/s per consumer with enhanced fan-out. |

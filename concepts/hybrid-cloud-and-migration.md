@@ -64,9 +64,9 @@ Bridges on-premises environments with AWS cloud storage.
 
 ### 2. Physical Data Transfer: AWS Snow Family
 Physical storage appliances shipped by AWS to handle offline, large-scale migrations.
-*   **Snowcone**: Compact, rugged 8 TB storage appliance.
-*   **Snowball Edge**: Rugged data transfer appliance offering up to 80 TB usable capacity, supporting EC2 compute instances on-board.
-*   **Snowmobile**: A heavy-duty semi-trailer capable of transferring up to 100 petabytes of data offline.
+*   **Snowball Edge**: Rugged data transfer appliance (Storage Optimized 210 TB NVMe), supporting EC2 compute instances on-board. Since **November 7, 2025** it is available only to existing Snow customers.
+*   **Retired**: **Snowcone** (discontinued November 2024) and **Snowmobile** (retired 2024).
+*   **New customers**: use **AWS DataSync** online, **AWS Data Transfer Terminal** for secure physical transfers, or partner solutions.
 
 ### 3. AWS Application Migration Service (MGN)
 The recommended service for lift-and-shift migration of physical, virtual, or cloud servers to AWS. It uses continuous block-level replication to synchronize disk contents from source servers directly to staging areas on AWS, allowing zero-downtime cutovers.
@@ -106,11 +106,11 @@ AWS MGN automates migrations through a highly secure, non-disruptive process:
 
 ### Question 4: How do you plan migration waves for 600 servers across 80 applications?
 **Answer**:
-1.  **Discover**: Run **AWS Application Discovery Service** (agent-based for network dependencies) and **Migration Evaluator** for right-sizing and the business case. Track everything in **AWS Migration Hub**.
+1.  **Discover**: Run **AWS Application Discovery Service** (agent-based for network dependencies) and **Migration Evaluator** for right-sizing and the business case. Track everything in **AWS Transform**. (AWS Migration Hub stopped accepting new customers on November 7, 2025; existing projects keep working.)
 2.  **Group by dependency, not by server**: Apps that share a database or talk constantly move together in one *move group*. Splitting them across a Direct Connect link adds latency to every call.
 3.  **Assign a 7R** to each app (rehost with **MGN**, replatform databases with **DMS**, retire or retain the rest).
 4.  **Wave 0 is a pilot**: Pick low-risk, low-dependency apps and prove the landing zone, networking, runbooks and rollback. Later waves (typically 2–4 weeks each) ramp in size and criticality.
-5.  Each wave gets a cutover runbook, go/no-go criteria, a rollback plan and a hypercare window. Automate repeatable steps with **Migration Hub Orchestrator** templates.
+5.  Each wave gets a cutover runbook, go/no-go criteria, a rollback plan and a hypercare window. Automate repeatable steps with **AWS Transform** workflows (the successor to Migration Hub Orchestrator).
 
 ### Question 5: After a DNS cutover to AWS, some users are still hitting the old on-prem servers. Walk me through it.
 **Answer**:
@@ -124,7 +124,7 @@ AWS MGN automates migrations through a highly secure, non-disruptive process:
 **Answer**:
 *   **Do the math first**: 500 TB over 1 Gbps at ~80% utilization is roughly **58 days**, and it saturates the link for production traffic.
 *   **AWS DataSync**: Online, incremental, with built-in integrity checks, scheduling and bandwidth throttling. It targets S3/EFS/FSx. It is best when the link can carry the volume in your window, or for ongoing sync.
-*   **Snowball Edge**: Offline bulk transfer, typically about a week per device round trip regardless of volume. It is best when bandwidth × time < data size, or the site has poor connectivity. Confirm current Snow device availability, since AWS has been narrowing the Snow Family.
+*   **Snowball Edge**: Offline bulk transfer, typically about a week per device round trip regardless of volume. It is best when bandwidth × time < data size, or the site has poor connectivity. Since November 7, 2025, Snowball Edge is available only to existing Snow customers, so new customers use **AWS Data Transfer Terminal** or a partner for offline transfer.
 *   **Common hybrid**: Seed the bulk data with Snowball, then run **DataSync** for the delta that changed while devices were in transit, and cut over.
 
 ### Question 7: Design a highly resilient Direct Connect architecture for a critical production workload.
